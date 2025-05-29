@@ -8,9 +8,11 @@ app.use(express.json());
 // Routes
 const siteLocationRoutes = require('./routes/siteLocationRoutes');
 const surveyRoutes = require('./routes/surveyRoutes');
+const authRoutes = require('./routes/authRoutes');
 
 app.use('/api/sites', siteLocationRoutes);
 app.use('/api/surveys', surveyRoutes);
+app.use('/api/auth', authRoutes);
 
 app.get('/', (req, res) => {
   res.send('Backend is running!');

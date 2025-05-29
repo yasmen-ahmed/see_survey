@@ -1,6 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const Survey = require('../models/Survey');
+const SiteLocation = require('../models/SiteLocation');
 
 // Get all surveys
 router.get('/', async (req, res) => {
@@ -33,7 +34,39 @@ router.get('/:siteId/:createdAt', async (req, res) => {
 // Create new survey
 router.post('/', async (req, res) => {
   try {
-    const survey = await Survey.create(req.body);
+    const { site_id, country, ct, project, company } = req.body;
+
+    // Check if site exists
+    let site = await SiteLocation.findByPk(site_id);
+    if (!site) {
+      // Create new site with default values
+      site = await SiteLocation.create({
+        site_id,
+        sitename: "",
+        region: '',
+        city: '',
+        longitude: 0,
+        latitude: 0,
+        site_elevation: 0,
+        address: ''
+      });
+    }
+
+    // Use ISO timestamp for created_at and session_id
+    const now = new Date();
+    const isoTimestamp = now.toISOString();
+    const session_id = isoTimestamp + site_id;
+
+    // Create new survey with explicit created_at
+    const survey = await Survey.create({
+      site_id,
+      session_id,
+      country: country ,
+      ct: ct ,
+      project: project ,
+      company: company 
+    });
+
     res.status(201).json(survey);
   } catch (error) {
     res.status(400).json({ error: error.message });

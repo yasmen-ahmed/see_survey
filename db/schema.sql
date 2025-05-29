@@ -22,4 +22,23 @@ CREATE TABLE survey (
   PRIMARY KEY (site_id, created_at),
   UNIQUE KEY (site_id, created_at),
   FOREIGN KEY (site_id) REFERENCES site_location(site_id)
-); 
+);
+
+CREATE TABLE users (
+  id INT AUTO_INCREMENT,
+  username VARCHAR(50) NOT NULL,
+  email VARCHAR(255) NOT NULL,
+  password VARCHAR(255) NOT NULL,
+  role ENUM('admin', 'engineer') DEFAULT 'engineer' NOT NULL,
+  firstName VARCHAR(100) NOT NULL,
+  lastName VARCHAR(100) NOT NULL,
+  NID VARCHAR(20) NOT NULL,
+  phone VARCHAR(20) NOT NULL,
+  title VARCHAR(100),
+  createdAt DATETIME DEFAULT CURRENT_TIMESTAMP,
+  updatedAt DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (id),
+  UNIQUE KEY unique_username (username),
+  UNIQUE KEY unique_email (email),
+  UNIQUE KEY unique_nid (NID)
+);
