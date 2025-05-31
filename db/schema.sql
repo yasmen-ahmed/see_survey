@@ -14,6 +14,8 @@ CREATE TABLE site_location (
 CREATE TABLE survey (
   site_id VARCHAR(50) NOT NULL,
   session_id VARCHAR(255) NOT NULL,
+  user_id INT NOT NULL,
+  creator_id INT NOT NULL,
   created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
   country VARCHAR(255),
   ct VARCHAR(255),
@@ -21,7 +23,9 @@ CREATE TABLE survey (
   company VARCHAR(255),
   PRIMARY KEY (site_id, created_at),
   UNIQUE KEY (site_id, created_at),
-  FOREIGN KEY (site_id) REFERENCES site_location(site_id)
+  FOREIGN KEY (site_id) REFERENCES site_location(site_id),
+  FOREIGN KEY (user_id) REFERENCES users(id),
+  FOREIGN KEY (creator_id) REFERENCES users(id)
 );
 
 CREATE TABLE users (

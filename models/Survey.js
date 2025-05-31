@@ -13,7 +13,24 @@ const Survey = sequelize.define('Survey', {
   },
   session_id: {
     type: DataTypes.STRING(255),
-    allowNull: false
+    allowNull: false,
+    unique: true
+  },
+  user_id: {
+    type: DataTypes.INTEGER,
+    allowNull: false,
+    references: {
+      model: 'users',
+      key: 'id'
+    }
+  },
+  creator_id: {
+    type: DataTypes.INTEGER,
+    allowNull: false,
+    references: {
+      model: 'users',
+      key: 'id'
+    }
   },
   created_at: {
     type: DataTypes.DATE,
@@ -31,6 +48,11 @@ const Survey = sequelize.define('Survey', {
   },
   company: {
     type: DataTypes.STRING(255)
+  },
+  TSSR_Status: {
+    type: DataTypes.ENUM('created', 'submitted', 'review', 'done'),
+    allowNull: false,
+    defaultValue: 'created'
   }
 }, {
   tableName: 'survey',
