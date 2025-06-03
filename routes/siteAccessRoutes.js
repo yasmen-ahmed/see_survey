@@ -23,7 +23,9 @@ router.get('/:session_id', async (req, res) => {
         preferred_time_slot_crane_access: '',
         access_to_site_by_road: '',
         keys_required: '',
-        material_accessibility_to_site: ''        
+        material_accessibility_to_site: '',
+        contact_person_name_for_site_key: '',
+        contact_tel_number_for_site_key: ''
       });
     }
     const result = entry.toJSON();
@@ -50,6 +52,15 @@ router.get('/:session_id', async (req, res) => {
 router.put('/:session_id', async (req, res) => {
   try {
     const { session_id } = req.params;
+    
+    // First, check if the session_id exists in the survey table
+    const survey = await Survey.findOne({ where: { session_id } });
+    if (!survey) {
+      return res.status(400).json({ 
+        error: `Survey with session_id '${session_id}' not found. Please create a survey first.` 
+      });
+    }
+    
     const [entry] = await SiteAccess.findOrCreate({
       where: { session_id },
       defaults: { session_id }

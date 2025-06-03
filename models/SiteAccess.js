@@ -20,7 +20,9 @@ const SiteAccess = sequelize.define('SiteAccess', {
   preferred_time_slot_crane_access: { type: DataTypes.STRING, defaultValue: '' },
   access_to_site_by_road: { type: DataTypes.STRING, defaultValue: '' },
   keys_required: { type: DataTypes.STRING, defaultValue: '' },
-  material_accessibility_to_site: { type: DataTypes.STRING, defaultValue: '' }
+  material_accessibility_to_site: { type: DataTypes.STRING, defaultValue: '' },
+  contact_person_name_for_site_key: { type: DataTypes.STRING, defaultValue: '' },
+  contact_tel_number_for_site_key: { type: DataTypes.STRING, defaultValue: '' }
 }, {
   tableName: 'site_access',
   timestamps: false

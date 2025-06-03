@@ -5,12 +5,18 @@ const bcrypt = require('bcryptjs');
 const User = sequelize.define('User', {
   username: {
     type: DataTypes.STRING(50),
-    unique: true,
+    unique: {
+      name: 'unique_username',
+      msg: 'Username already exists'
+    },
     allowNull: false
   },
   email: {
     type: DataTypes.STRING(255),
-    unique: true,
+    unique: {
+      name: 'unique_email',
+      msg: 'Email already exists'
+    },
     allowNull: false,
     validate: {
       isEmail: true
@@ -35,7 +41,10 @@ const User = sequelize.define('User', {
   },
   NID: {
     type: DataTypes.STRING(20),
-    unique: true,
+    unique: {
+      name: 'unique_nid',
+      msg: 'NID already exists'
+    },
     allowNull: false
   },
   phone: {

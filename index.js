@@ -6,8 +6,15 @@ const PORT = process.env.PORT || 3000;
 const authMiddleware = require('./middleware/authMiddleware');
 const sequelize = require('./config/database');
 
-// Enable CORS for frontend at localhost:5173
-app.use(cors({ origin: 'http://localhost:5173' }));
+// Enable CORS for both development and production
+app.use(cors({
+  origin: [
+    'http://localhost:5173', // Development
+    'https://your-frontend-domain.vercel.app' // Production - Replace with your actual frontend domain
+  ],
+  credentials: true
+}));
+
 app.use(express.json());
 
 // Routes
@@ -17,6 +24,7 @@ const authRoutes = require('./routes/authRoutes');
 const userRoutes = require('./routes/userRoutes');
 const siteVisitInfoRoutes = require('./routes/siteVisitInfoRoutes');
 const siteAccessRoutes = require('./routes/siteAccessRoutes');
+const siteAreaInfoRoutes = require('./routes/siteAreaInfoRoutes');
 
 // Define Sequelize model associations
 const User = require('./models/User');
@@ -35,13 +43,14 @@ app.use('/api/auth', authRoutes);
 app.use('/api/surveys', surveyRoutes);
 app.use('/api/site-visit-info', siteVisitInfoRoutes);
 app.use('/api/site-access', siteAccessRoutes);
+app.use('/api/site-area-info', siteAreaInfoRoutes);
 
 app.get('/', (req, res) => {
   res.send('Backend is running!');
 });
 
 // Sync database and start server
-sequelize.sync()
+sequelize.sync({ alter: true })
   .then(() => {
     app.listen(PORT, () => {
       console.log(`Server is running on port ${PORT}`);
