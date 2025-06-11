@@ -28,6 +28,7 @@ const siteAreaInfoRoutes = require('./routes/siteAreaInfoRoutes');
 const acConnectionInfoRoutes = require('./routes/acConnectionInfoRoutes');
 const powerMeterRoutes = require('./routes/powerMeterRoutes');
 const acPanelRoutes = require('./routes/acPanelRoutes');
+const outdoorGeneralLayoutRoutes = require('./routes/outdoorGeneralLayoutRoutes');
 
 // Define Sequelize model associations
 const User = require('./models/User');
@@ -50,6 +51,7 @@ app.use('/api/site-area-info', siteAreaInfoRoutes);
 app.use('/api/ac-connection-info', acConnectionInfoRoutes);
 app.use('/api/power-meter', powerMeterRoutes);
 app.use('/api/ac-panel', acPanelRoutes);
+app.use('/api/outdoor-general-layout', outdoorGeneralLayoutRoutes);
 
 app.get('/', (req, res) => {
   res.send('Backend is running!');
