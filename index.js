@@ -30,11 +30,14 @@ const powerMeterRoutes = require('./routes/powerMeterRoutes');
 const acPanelRoutes = require('./routes/acPanelRoutes');
 const outdoorGeneralLayoutRoutes = require('./routes/outdoorGeneralLayoutRoutes');
 const outdoorCabinetsRoutes = require('./routes/outdoorCabinetsRoutes');
+const ranEquipmentRoutes = require('./routes/ranEquipmentRoutes');
+const transmissionMWRoutes = require('./routes/transmissionMW');
 
 // Define Sequelize model associations
 const User = require('./models/User');
 const Survey = require('./models/Survey');
 const SiteVisitInfo = require('./models/SiteVisitInfo');
+const TransmissionMW = require('./models/TransmissionMW');
 User.hasMany(Survey, { foreignKey: 'user_id', as: 'surveys' });
 User.hasMany(Survey, { foreignKey: 'creator_id', as: 'createdSurveys' });
 Survey.belongsTo(User, { foreignKey: 'user_id', as: 'user' });
@@ -54,6 +57,8 @@ app.use('/api/power-meter', powerMeterRoutes);
 app.use('/api/ac-panel', acPanelRoutes);
 app.use('/api/outdoor-general-layout', outdoorGeneralLayoutRoutes);
 app.use('/api/outdoor-cabinets', outdoorCabinetsRoutes);
+app.use('/api/ran-equipment', ranEquipmentRoutes);
+app.use('/api/transmission-mw', transmissionMWRoutes);
 
 app.get('/', (req, res) => {
   res.send('Backend is running!');

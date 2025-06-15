@@ -57,3 +57,14 @@ CREATE TABLE outdoor_cabinets (
 );
 
 CREATE UNIQUE INDEX idx_outdoor_cabinets_session_id ON outdoor_cabinets (session_id);
+
+CREATE TABLE ran_equipment (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  session_id VARCHAR(255) NOT NULL UNIQUE,
+  number_of_cabinets INTEGER CHECK (number_of_cabinets >= 1 AND number_of_cabinets <= 10),
+  ran_equipment JSON NOT NULL DEFAULT '[]',
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE UNIQUE INDEX idx_ran_equipment_session_id ON ran_equipment (session_id);
