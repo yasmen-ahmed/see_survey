@@ -81,12 +81,6 @@ const RanEquipment = sequelize.define('RanEquipment', {
 }, {
   tableName: 'ran_equipment',
   timestamps: false, // We're handling timestamps manually
-  indexes: [
-    {
-      unique: true,
-      fields: ['session_id']
-    }
-  ]
 });
 
 // Add hooks for automatic timestamp management

@@ -95,13 +95,7 @@ const PowerMeter = sequelize.define('PowerMeter', {
   
 }, {
   tableName: 'power_meter',
-  timestamps: false, // We're handling timestamps manually
-  indexes: [
-    {
-      unique: true,
-      fields: ['session_id']
-    }
-  ]
+  timestamps: false // We're handling timestamps manually
 });
 
 // Add hooks for automatic timestamp management

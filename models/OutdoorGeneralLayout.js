@@ -101,13 +101,7 @@ const OutdoorGeneralLayout = sequelize.define('OutdoorGeneralLayout', {
   
 }, {
   tableName: 'outdoor_general_layout',
-  timestamps: false, // We're handling timestamps manually
-  indexes: [
-    {
-      unique: true,
-      fields: ['session_id']
-    }
-  ]
+  timestamps: false // We're handling timestamps manually
 });
 
 // Add hooks for automatic timestamp management

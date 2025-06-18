@@ -114,13 +114,7 @@ const OutdoorCabinets = sequelize.define('OutdoorCabinets', {
   
 }, {
   tableName: 'outdoor_cabinets',
-  timestamps: false, // We're handling timestamps manually
-  indexes: [
-    {
-      unique: true,
-      fields: ['session_id']
-    }
-  ]
+  timestamps: false // We're handling timestamps manually
 });
 
 // Add hooks for automatic timestamp management

@@ -19,6 +19,76 @@ const AcPanel = sequelize.define('AcPanel', {
     onUpdate: 'CASCADE'
   },
   
+  // AC panel configuration
+  ac_panel_config: {
+    type: DataTypes.JSON,
+    defaultValue: null,
+    validate: {
+      isValidAcPanelConfig(value) {
+        if (value === null) return;
+        
+        const { type, commercial_power_phases, capacity, space_available, phases_connected } = value;
+        
+        // Validate type
+        if (!type || !['new_installation', 'existing_upgrade'].includes(type)) {
+          throw new Error('AC panel type must be "new_installation" or "existing_upgrade"');
+        }
+        
+        // For commercial power, validate phases
+        if (commercial_power_phases && ![1, 3].includes(commercial_power_phases)) {
+          throw new Error('Commercial power phases must be 1 or 3');
+        }
+        
+        // Validate capacity if provided
+        if (capacity !== undefined && capacity !== null && capacity !== '') {
+          const capacityValue = parseFloat(capacity);
+          if (isNaN(capacityValue) || capacityValue <= 0) {
+            throw new Error('AC panel capacity must be a positive number');
+          }
+        }
+        
+        // Validate space available
+        if (space_available !== undefined && space_available !== null && space_available !== '') {
+          const spaceValue = parseInt(space_available);
+          if (isNaN(spaceValue) || spaceValue < 0) {
+            throw new Error('Space available must be a non-negative integer');
+          }
+        }
+        
+        // Validate phases connected if provided
+        if (phases_connected && !Array.isArray(phases_connected)) {
+          throw new Error('Phases connected must be an array');
+        }
+      }
+    }
+  },
+  
+  // Additional AC equipment details
+  ac_equipment: {
+    type: DataTypes.JSON,
+    defaultValue: [],
+    validate: {
+      isValidAcEquipment(value) {
+        if (!Array.isArray(value)) {
+          throw new Error('AC equipment must be an array');
+        }
+        
+        value.forEach((equipment, index) => {
+          if (!equipment.type || typeof equipment.type !== 'string') {
+            throw new Error(`Equipment ${index + 1} must have a valid type`);
+          }
+          
+          if (equipment.power_consumption !== undefined && equipment.power_consumption !== null && equipment.power_consumption !== '') {
+            const power = parseFloat(equipment.power_consumption);
+            if (isNaN(power) || power < 0) {
+              throw new Error(`Equipment ${index + 1} power consumption must be non-negative`);
+            }
+          }
+        });
+      }
+    }
+  },
+  
   // Power cable configuration (from power meter to AC panel)
   power_cable_config: {
     type: DataTypes.JSON,
@@ -112,13 +182,7 @@ const AcPanel = sequelize.define('AcPanel', {
   
 }, {
   tableName: 'ac_panel',
-  timestamps: false, // We're handling timestamps manually
-  indexes: [
-    {
-      unique: true,
-      fields: ['session_id']
-    }
-  ]
+  timestamps: false // We're handling timestamps manually
 });
 
 // Add hooks for automatic timestamp management
