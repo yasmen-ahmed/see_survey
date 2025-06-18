@@ -38,6 +38,7 @@ const antennaStructureRoutes = require('./routes/antennaStructure');
 const mwAntennasRoutes = require('./routes/mwAntennas');
 const externalDCDistributionRoutes = require('./routes/externalDCDistributionRoutes');
 const antennaConfigurationRoutes = require('./routes/antennaConfigurationRoutes');
+const radioUnitsRoutes = require('./routes/radioUnitsRoutes');
 
 // Define Sequelize model associations
 const User = require('./models/User');
@@ -49,6 +50,7 @@ const AntennaStructure = require('./models/AntennaStructure');
 const MWAntennas = require('./models/MWAntennas');
 const ExternalDCDistribution = require('./models/ExternalDCDistribution');
 const AntennaConfiguration = require('./models/AntennaConfiguration');
+const RadioUnits = require('./models/RadioUnits');
 
 User.hasMany(Survey, { foreignKey: 'user_id', as: 'surveys' });
 User.hasMany(Survey, { foreignKey: 'creator_id', as: 'createdSurveys' });
@@ -60,6 +62,8 @@ Survey.hasOne(ExternalDCDistribution, { foreignKey: 'session_id', sourceKey: 'se
 ExternalDCDistribution.belongsTo(Survey, { foreignKey: 'session_id', targetKey: 'session_id' });
 Survey.hasOne(AntennaConfiguration, { foreignKey: 'session_id', sourceKey: 'session_id', as: 'antennaConfiguration' });
 AntennaConfiguration.belongsTo(Survey, { foreignKey: 'session_id', targetKey: 'session_id' });
+Survey.hasOne(RadioUnits, { foreignKey: 'session_id', sourceKey: 'session_id', as: 'radioUnits' });
+RadioUnits.belongsTo(Survey, { foreignKey: 'session_id', targetKey: 'session_id' });
 
 app.use('/api/sites', siteLocationRoutes);
 app.use('/api/users', userRoutes);
@@ -80,6 +84,7 @@ app.use('/api/antenna-structure', antennaStructureRoutes);
 app.use('/api/mw-antennas', mwAntennasRoutes);
 app.use('/api/external-dc-distribution', externalDCDistributionRoutes);
 app.use('/api/antenna-configuration', antennaConfigurationRoutes);
+app.use('/api/radio-units', radioUnitsRoutes);
 
 app.get('/', (req, res) => {
   res.send('Backend is running!');
