@@ -11,7 +11,8 @@ app.use(cors({
   origin: [
     'http://localhost:5173', // Development
     'https://see-survey-bmgy.vercel.app',
-    'http://localhost:8000'
+    'http://localhost:8000',
+    "http://10.129.10.227:8000"
   ],
   credentials: true
 }));
