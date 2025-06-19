@@ -223,14 +223,14 @@ Content-Type: application/json
 
 ---
 
-### 5. PATCH - Partial Update Antenna Configuration
-**URL:** `PATCH /api/antenna-configuration/:session_id`
+### 5. PUT - Partial Update Antenna Configuration
+**URL:** `PUT /api/antenna-configuration/:session_id`
 
 **Description:** Partially updates antenna configuration (only provided fields).
 
 **Example Request:**
 ```
-PATCH http://localhost:3000/api/antenna-configuration/ABC123
+PUT http://localhost:3000/api/antenna-configuration/ABC123
 Content-Type: application/json
 ```
 
@@ -259,14 +259,14 @@ Content-Type: application/json
 
 ---
 
-### 6. PATCH - Update Specific Antenna
-**URL:** `PATCH /api/antenna-configuration/:session_id/antenna/:antenna_index`
+### 6. PUT - Update Specific Antenna
+**URL:** `PUT /api/antenna-configuration/:session_id/antenna/:antenna_index`
 
 **Description:** Updates a specific antenna by index (0-based).
 
 **Example Request:**
 ```
-PATCH http://localhost:3000/api/antenna-configuration/ABC123/antenna/0
+PUT http://localhost:3000/api/antenna-configuration/ABC123/antenna/0
 Content-Type: application/json
 ```
 

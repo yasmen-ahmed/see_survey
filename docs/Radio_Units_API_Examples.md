@@ -9,7 +9,7 @@
 | **GET** | `/api/radio-units/cabinet-dc-options/:session_id/:cabinet_number` | Get DC options for specific cabinet |
 | **POST** | `/api/radio-units/:session_id` | Create radio units data |
 | **PUT** | `/api/radio-units/:session_id` | Update radio units data |
-| **PATCH** | `/api/radio-units/:session_id/unit/:unit_index` | Update specific radio unit |
+| **PUT** | `/api/radio-units/:session_id/unit/:unit_index` | Update specific radio unit |
 | **DELETE** | `/api/radio-units/:session_id` | Delete radio units data |
 
 ---

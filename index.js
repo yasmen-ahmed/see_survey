@@ -40,6 +40,8 @@ const mwAntennasRoutes = require('./routes/mwAntennas');
 const externalDCDistributionRoutes = require('./routes/externalDCDistributionRoutes');
 const antennaConfigurationRoutes = require('./routes/antennaConfigurationRoutes');
 const radioUnitsRoutes = require('./routes/radioUnitsRoutes');
+const newRadioInstallationsRoutes = require('./routes/newRadioInstallationsRoutes');
+const newAntennasRoutes = require('./routes/newAntennasRoutes');
 
 // Define Sequelize model associations
 const User = require('./models/User');
@@ -52,6 +54,8 @@ const MWAntennas = require('./models/MWAntennas');
 const ExternalDCDistribution = require('./models/ExternalDCDistribution');
 const AntennaConfiguration = require('./models/AntennaConfiguration');
 const RadioUnits = require('./models/RadioUnits');
+const NewRadioInstallations = require('./models/NewRadioInstallations');
+const NewAntennas = require('./models/NewAntennas');
 
 User.hasMany(Survey, { foreignKey: 'user_id', as: 'surveys' });
 User.hasMany(Survey, { foreignKey: 'creator_id', as: 'createdSurveys' });
@@ -65,6 +69,11 @@ Survey.hasOne(AntennaConfiguration, { foreignKey: 'session_id', sourceKey: 'sess
 AntennaConfiguration.belongsTo(Survey, { foreignKey: 'session_id', targetKey: 'session_id' });
 Survey.hasOne(RadioUnits, { foreignKey: 'session_id', sourceKey: 'session_id', as: 'radioUnits' });
 RadioUnits.belongsTo(Survey, { foreignKey: 'session_id', targetKey: 'session_id' });
+Survey.hasOne(NewRadioInstallations, { foreignKey: 'session_id', sourceKey: 'session_id', as: 'newRadioInstallations' });
+NewRadioInstallations.belongsTo(Survey, { foreignKey: 'session_id', targetKey: 'session_id' });
+// Simplified associations without foreign key constraints to avoid index limits
+NewRadioInstallations.hasMany(NewAntennas, { foreignKey: 'session_id', sourceKey: 'session_id', as: 'newAntennas', constraints: false });
+NewAntennas.belongsTo(NewRadioInstallations, { foreignKey: 'session_id', targetKey: 'session_id', constraints: false });
 
 app.use('/api/sites', siteLocationRoutes);
 app.use('/api/users', userRoutes);
@@ -86,13 +95,15 @@ app.use('/api/mw-antennas', mwAntennasRoutes);
 app.use('/api/external-dc-distribution', externalDCDistributionRoutes);
 app.use('/api/antenna-configuration', antennaConfigurationRoutes);
 app.use('/api/radio-units', radioUnitsRoutes);
+app.use('/api/new-radio-installations', newRadioInstallationsRoutes);
+app.use('/api/new-antennas', newAntennasRoutes);
 
 app.get('/', (req, res) => {
   res.send('Backend is running!');
 });
 
 // Sync database and start server
-sequelize.sync({ alter: true })
+sequelize.sync({ force: false, alter: false })
   .then(() => {
     app.listen(PORT, () => {
       console.log(`Server is running on port ${PORT}`);
@@ -100,4 +111,9 @@ sequelize.sync({ alter: true })
   })
   .catch(error => {
     console.error('Unable to sync database:', error);
+    // Try to start server anyway for existing functionality
+    app.listen(PORT, () => {
+      console.log(`Server started on port ${PORT} (database sync failed)`);
+      console.log('You may need to create new tables manually');
+    });
   }); 

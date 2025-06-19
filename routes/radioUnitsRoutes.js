@@ -717,8 +717,8 @@ router.put('/:session_id', async (req, res) => {
   }
 });
 
-// PATCH /api/radio-units/:session_id/unit/:unit_index
-router.patch('/:session_id/unit/:unit_index', async (req, res) => {
+// PUT /api/radio-units/:session_id/unit/:unit_index
+router.put('/:session_id/unit/:unit_index', async (req, res) => {
   try {
     const { session_id, unit_index } = req.params;
     const radioUnitData = req.body;

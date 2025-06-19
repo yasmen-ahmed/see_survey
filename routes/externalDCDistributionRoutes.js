@@ -354,7 +354,7 @@ router.put('/:session_id', async (req, res) => {
 });
 
 // Update specific PDU by index (NO TOKEN REQUIRED)
-router.patch('/:session_id/pdu/:pdu_index', async (req, res) => {
+router.put('/:session_id/pdu/:pdu_index', async (req, res) => {
   try {
     const { session_id, pdu_index } = req.params;
     const pduData = req.body;
@@ -411,8 +411,8 @@ router.patch('/:session_id/pdu/:pdu_index', async (req, res) => {
   }
 });
 
-// Partial update External DC Distribution data by session_id (PATCH method - NO TOKEN REQUIRED)
-router.patch('/:session_id', async (req, res) => {
+// Partial update External DC Distribution data by session_id (PUT method - NO TOKEN REQUIRED)
+router.put('/:session_id', async (req, res) => {
   try {
     const { session_id } = req.params;
     const updateData = req.body;

@@ -349,8 +349,8 @@ router.put('/:session_id', async (req, res) => {
   }
 });
 
-// PATCH /api/antenna-configuration/:session_id (Partial update)
-router.patch('/:session_id', async (req, res) => {
+// PUT /api/antenna-configuration/:session_id (Partial update)
+router.put('/:session_id', async (req, res) => {
   try {
     const { session_id } = req.params;
     const updateData = req.body;
@@ -413,8 +413,8 @@ router.patch('/:session_id', async (req, res) => {
   }
 });
 
-// PATCH /api/antenna-configuration/:session_id/antenna/:antenna_index (Update specific antenna)
-router.patch('/:session_id/antenna/:antenna_index', async (req, res) => {
+// PUT /api/antenna-configuration/:session_id/antenna/:antenna_index (Update specific antenna)
+router.put('/:session_id/antenna/:antenna_index', async (req, res) => {
   try {
     const { session_id, antenna_index } = req.params;
     const antennaData = req.body;
