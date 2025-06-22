@@ -42,6 +42,12 @@ const antennaConfigurationRoutes = require('./routes/antennaConfigurationRoutes'
 const radioUnitsRoutes = require('./routes/radioUnitsRoutes');
 const newRadioInstallationsRoutes = require('./routes/newRadioInstallationsRoutes');
 const newAntennasRoutes = require('./routes/newAntennasRoutes');
+const newRadioUnitsRoutes = require('./routes/newRadioUnitsRoutes');
+const newFPFHsRoutes = require('./routes/newFPFHsRoutes');
+const newGPSRoutes = require('./routes/newGPSRoutes');
+// Health & Safety routes
+const healthSafetySiteAccessRoutes = require('./routes/healthSafetySiteAccessRoutes');
+const healthSafetyBTSAccessRoutes = require('./routes/healthSafetyBTSAccessRoutes');
 
 // Define Sequelize model associations
 const User = require('./models/User');
@@ -56,6 +62,12 @@ const AntennaConfiguration = require('./models/AntennaConfiguration');
 const RadioUnits = require('./models/RadioUnits');
 const NewRadioInstallations = require('./models/NewRadioInstallations');
 const NewAntennas = require('./models/NewAntennas');
+const NewRadioUnits = require('./models/NewRadioUnits');
+const NewFPFHs = require('./models/NewFPFHs');
+const NewGPS = require('./models/NewGPS');
+// Health & Safety models
+const HealthSafetySiteAccess = require('./models/HealthSafetySiteAccess');
+const HealthSafetyBTSAccess = require('./models/HealthSafetyBTSAccess');
 
 User.hasMany(Survey, { foreignKey: 'user_id', as: 'surveys' });
 User.hasMany(Survey, { foreignKey: 'creator_id', as: 'createdSurveys' });
@@ -74,6 +86,17 @@ NewRadioInstallations.belongsTo(Survey, { foreignKey: 'session_id', targetKey: '
 // Simplified associations without foreign key constraints to avoid index limits
 NewRadioInstallations.hasMany(NewAntennas, { foreignKey: 'session_id', sourceKey: 'session_id', as: 'newAntennas', constraints: false });
 NewAntennas.belongsTo(NewRadioInstallations, { foreignKey: 'session_id', targetKey: 'session_id', constraints: false });
+NewRadioInstallations.hasOne(NewRadioUnits, { foreignKey: 'session_id', sourceKey: 'session_id', as: 'newRadioUnits', constraints: false });
+NewRadioUnits.belongsTo(NewRadioInstallations, { foreignKey: 'session_id', targetKey: 'session_id', constraints: false });
+NewRadioInstallations.hasOne(NewFPFHs, { foreignKey: 'session_id', sourceKey: 'session_id', as: 'newFPFHs', constraints: false });
+NewFPFHs.belongsTo(NewRadioInstallations, { foreignKey: 'session_id', targetKey: 'session_id', constraints: false });
+Survey.hasOne(NewGPS, { foreignKey: 'session_id', sourceKey: 'session_id', as: 'newGPS', constraints: false });
+NewGPS.belongsTo(Survey, { foreignKey: 'session_id', targetKey: 'session_id', constraints: false });
+// Health & Safety associations
+Survey.hasOne(HealthSafetySiteAccess, { foreignKey: 'session_id', sourceKey: 'session_id', as: 'healthSafetySiteAccess', constraints: false });
+HealthSafetySiteAccess.belongsTo(Survey, { foreignKey: 'session_id', targetKey: 'session_id', constraints: false });
+Survey.hasOne(HealthSafetyBTSAccess, { foreignKey: 'session_id', sourceKey: 'session_id', as: 'healthSafetyBTSAccess', constraints: false });
+HealthSafetyBTSAccess.belongsTo(Survey, { foreignKey: 'session_id', targetKey: 'session_id', constraints: false });
 
 app.use('/api/sites', siteLocationRoutes);
 app.use('/api/users', userRoutes);
@@ -97,6 +120,12 @@ app.use('/api/antenna-configuration', antennaConfigurationRoutes);
 app.use('/api/radio-units', radioUnitsRoutes);
 app.use('/api/new-radio-installations', newRadioInstallationsRoutes);
 app.use('/api/new-antennas', newAntennasRoutes);
+app.use('/api/new-radio-units', newRadioUnitsRoutes);
+app.use('/api/new-fpfh', newFPFHsRoutes);
+app.use('/api/new-gps', newGPSRoutes);
+// Health & Safety route registrations
+app.use('/api/health-safety-site-access', healthSafetySiteAccessRoutes);
+app.use('/api/health-safety-bts-access', healthSafetyBTSAccessRoutes);
 
 app.get('/', (req, res) => {
   res.send('Backend is running!');
