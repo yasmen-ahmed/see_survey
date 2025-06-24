@@ -2,7 +2,7 @@ const express = require('express');
 const router = express.Router();
 const AntennaStructureService = require('../services/AntennaStructureService');
 const AntennaStructureImageService = require('../services/AntennaStructureImageService');
-const { uploadSingle, uploadMultiple } = require('../middleware/upload');
+const { uploadSingle, uploadMultiple, imageCategories } = require('../middleware/upload');
 
 /**
  * GET /api/antenna-structure/:sessionId
@@ -38,31 +38,103 @@ router.get('/:sessionId', async (req, res) => {
 
 /**
  * PUT /api/antenna-structure/:sessionId
- * Update antenna structure data by session ID
+ * Update antenna structure data by session ID (with category-based image replacement)
  */
-router.put('/:sessionId', async (req, res) => {
+router.put('/:sessionId', uploadMultiple, async (req, res) => {
   try {
     const { sessionId } = req.params;
-    const updateData = req.body;
+    let updateData = {};
     
-    // Validate that we have data to update
-    if (!updateData ) {
-      return res.status(400).json({
-        success: false,
-        error: {
-          type: 'VALIDATION_ERROR',
-          message: 'No data provided for update'
-        }
-      });
+    // Handle both JSON and form-data
+    if (req.body) {
+      // If form-data, parse JSON fields (exclude image category names)
+      if (req.headers['content-type']?.includes('multipart/form-data')) {
+        // Extract structure data from form fields (ignore image categories and description)
+        Object.keys(req.body).forEach(key => {
+          if (!imageCategories.includes(key) && key !== 'description') {
+            try {
+              // Try to parse as JSON first
+              updateData[key] = JSON.parse(req.body[key]);
+            } catch {
+              // If not JSON, use as string
+              updateData[key] = req.body[key];
+            }
+          }
+        });
+      } else {
+        // Regular JSON body
+        updateData = req.body;
+      }
     }
     
-    const result = await AntennaStructureService.getOrCreateBySessionId(sessionId, updateData);
+    // Update antenna structure data if provided
+    let result = null;
+    if (Object.keys(updateData).length > 0) {
+      result = await AntennaStructureService.getOrCreateBySessionId(sessionId, updateData);
+    } else {
+      result = await AntennaStructureService.getOrCreateBySessionId(sessionId);
+    }
     
-    res.status(200).json({
+    // Handle image uploads/replacements if files are provided
+    let imageResults = [];
+    if (req.imagesByCategory && Object.keys(req.imagesByCategory).length > 0) {
+      const { description } = req.body;
+      
+      // Process each category - replace existing image
+      for (const [category, file] of Object.entries(req.imagesByCategory)) {
+        try {
+          // Replace (or create) image record, and delete old file internally
+          const replaceResult = await AntennaStructureImageService.replaceImage({
+            file,
+            session_id: sessionId,
+            image_category: category,
+            description: description || null
+          });
+          imageResults.push({
+            category,
+            success: true,
+            data: replaceResult.data
+          });
+        } catch (error) {
+          imageResults.push({
+            category,
+            success: false,
+            error: error.message
+          });
+        }
+      }
+      
+      // Get updated data with new images
+      result = await AntennaStructureService.getOrCreateBySessionId(sessionId);
+    }
+    
+    const response = {
       success: true,
       data: result,
       message: 'Antenna Structure data updated successfully'
-    });
+    };
+    
+    // Add image upload info if images were uploaded
+    if (imageResults.length > 0) {
+      const successCount = imageResults.filter(r => r.success).length;
+      const failCount = imageResults.filter(r => !r.success).length;
+      
+      response.images_processed = {
+        total: imageResults.length,
+        successful: successCount,
+        failed: failCount,
+        details: imageResults
+      };
+      
+      if (successCount > 0) {
+        response.message += ` and ${successCount} image(s) uploaded/replaced`;
+      }
+      if (failCount > 0) {
+        response.message += ` (${failCount} failed)`;
+      }
+    }
+    
+    res.status(200).json(response);
     
   } catch (error) {
     console.error('Error updating antenna structure data:', error);
@@ -186,18 +258,18 @@ router.post('/:sessionId/images/upload', uploadSingle, async (req, res) => {
     }
     
     // Validate image category
-    const availableCategories = AntennaStructureImageService.getAvailableCategories();
-    if (!availableCategories.includes(image_category)) {
+    if (!imageCategories.includes(image_category)) {
       return res.status(400).json({
         success: false,
         error: {
           type: 'VALIDATION_ERROR',
-          message: `Invalid image_category. Available categories: ${availableCategories.join(', ')}`
+          message: `Invalid image_category. Available categories: ${imageCategories.join(', ')}`
         }
       });
     }
     
-    const result = await AntennaStructureImageService.uploadImage({
+    // Replace existing image or create new
+    const replaceResult = await AntennaStructureImageService.replaceImage({
       file: req.file,
       session_id: sessionId,
       image_category,
@@ -206,8 +278,8 @@ router.post('/:sessionId/images/upload', uploadSingle, async (req, res) => {
     
     res.status(201).json({
       success: true,
-      data: result.data,
-      message: 'Image uploaded successfully'
+      data: replaceResult.data,
+      message: 'Image uploaded and replaced successfully'
     });
     
   } catch (error) {
@@ -218,81 +290,6 @@ router.post('/:sessionId/images/upload', uploadSingle, async (req, res) => {
       error: {
         type: 'INTERNAL_ERROR',
         message: error.message || 'Failed to upload image'
-      }
-    });
-  }
-});
-
-/**
- * POST /api/antenna-structure/:sessionId/images/upload-multiple
- * Upload multiple images for antenna structure
- */
-router.post('/:sessionId/images/upload-multiple', uploadMultiple, async (req, res) => {
-  try {
-    const { sessionId } = req.params;
-    const { image_category, description } = req.body;
-    
-    if (!req.files || req.files.length === 0) {
-      return res.status(400).json({
-        success: false,
-        error: {
-          type: 'VALIDATION_ERROR',
-          message: 'No image files provided'
-        }
-      });
-    }
-    
-    if (!image_category) {
-      return res.status(400).json({
-        success: false,
-        error: {
-          type: 'VALIDATION_ERROR',
-          message: 'image_category is required'
-        }
-      });
-    }
-    
-    // Validate image category
-    const availableCategories = AntennaStructureImageService.getAvailableCategories();
-    if (!availableCategories.includes(image_category)) {
-      return res.status(400).json({
-        success: false,
-        error: {
-          type: 'VALIDATION_ERROR',
-          message: `Invalid image_category. Available categories: ${availableCategories.join(', ')}`
-        }
-      });
-    }
-    
-    // Prepare data for each file
-    const imagesData = req.files.map(file => ({
-      file,
-      session_id: sessionId,
-      image_category,
-      description: description || null
-    }));
-    
-    const result = await AntennaStructureImageService.uploadMultipleImages(imagesData);
-    
-    res.status(201).json({
-      success: result.success,
-      data: {
-        uploaded: result.uploaded,
-        failed: result.failed,
-        results: result.results,
-        errors: result.errors
-      },
-      message: `Upload completed. ${result.uploaded} successful, ${result.failed} failed`
-    });
-    
-  } catch (error) {
-    console.error('Error uploading multiple antenna structure images:', error);
-    
-    res.status(500).json({
-      success: false,
-      error: {
-        type: 'INTERNAL_ERROR',
-        message: error.message || 'Failed to upload images'
       }
     });
   }
@@ -357,7 +354,7 @@ router.get('/:sessionId/images/grouped', async (req, res) => {
         session_id: sessionId,
         images_by_category: imagesGrouped,
         total_categories: Object.keys(imagesGrouped).length,
-        available_categories: AntennaStructureImageService.getAvailableCategories()
+        available_categories: imageCategories
       },
       message: 'Images grouped by category retrieved successfully'
     });
@@ -444,13 +441,11 @@ router.put('/images/:imageId', async (req, res) => {
  */
 router.get('/images/categories', async (req, res) => {
   try {
-    const categories = AntennaStructureImageService.getAvailableCategories();
-    
     res.status(200).json({
       success: true,
       data: {
-        categories: categories,
-        total_categories: categories.length
+        categories: imageCategories,
+        total_categories: imageCategories.length
       },
       message: 'Available image categories retrieved successfully'
     });

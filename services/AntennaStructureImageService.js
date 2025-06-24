@@ -211,6 +211,55 @@ class AntennaStructureImageService {
     };
   }
 
+  async deleteImagesBySessionAndCategory(sessionId, imageCategory) {
+    try {
+      // Find all active images for this session and category
+      const images = await AntennaStructureImages.findAll({
+        where: { 
+          session_id: sessionId,
+          image_category: imageCategory,
+          is_active: true 
+        }
+      });
+
+      if (images.length === 0) {
+        return {
+          deleted: 0,
+          message: 'No images found to delete'
+        };
+      }
+
+      // Soft delete all images
+      const deletedCount = await AntennaStructureImages.update(
+        { is_active: false },
+        { 
+          where: { 
+            session_id: sessionId,
+            image_category: imageCategory,
+            is_active: true 
+          } 
+        }
+      );
+
+      // Optionally delete files from disk (uncomment if you want hard delete)
+      // for (const image of images) {
+      //   try {
+      //     await fs.unlink(image.file_path);
+      //   } catch (error) {
+      //     console.warn(`Failed to delete file ${image.file_path} from disk:`, error.message);
+      //   }
+      // }
+
+      return {
+        deleted: deletedCount[0] || 0,
+        message: `Deleted ${deletedCount[0] || 0} images for category ${imageCategory}`
+      };
+    } catch (error) {
+      console.error('Error deleting images by session and category:', error);
+      throw error;
+    }
+  }
+
   async updateImageMetadata(imageId, updates) {
     const image = await this.getImageById(imageId);
     
@@ -247,6 +296,64 @@ class AntennaStructureImageService {
       'general_structure_photo',
       'custom_photo'
     ];
+  }
+
+  /**
+   * Replace existing image for a session/category or create new if none
+   */
+  async replaceImage(imageData) {
+    const { file, session_id, image_category, description = null, metadata = {} } = imageData;
+
+    // Save new file to disk
+    const fileInfo = await this.saveFile(file);
+
+    // Find existing active record
+    let record = await AntennaStructureImages.findOne({
+      where: { session_id, image_category, is_active: true }
+    });
+
+    if (record) {
+      const oldPath = record.file_path;
+
+      // Update record fields
+      await record.update({
+        original_filename: fileInfo.originalFilename,
+        stored_filename: fileInfo.storedFilename,
+        file_path: fileInfo.filePath,
+        file_url: fileInfo.fileUrl,
+        file_size: fileInfo.fileSize,
+        mime_type: fileInfo.mimeType,
+        description,
+        metadata
+      });
+
+      // Delete old file from disk
+      try {
+        await fs.unlink(oldPath);
+      } catch (err) {
+        console.warn('Failed to delete old file during replace:', err.message);
+      }
+    } else {
+      // Create new record if none exists
+      record = await AntennaStructureImages.create({
+        session_id,
+        image_category,
+        original_filename: fileInfo.originalFilename,
+        stored_filename: fileInfo.storedFilename,
+        file_path: fileInfo.filePath,
+        file_url: fileInfo.fileUrl,
+        file_size: fileInfo.fileSize,
+        mime_type: fileInfo.mimeType,
+        description,
+        metadata
+      });
+    }
+
+    return {
+      success: true,
+      data: record,
+      message: 'Image replaced successfully'
+    };
   }
 }
 
