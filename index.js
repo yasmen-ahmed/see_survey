@@ -22,6 +22,7 @@ app.use(express.json());
 
 // Serve static files for uploaded images
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
+app.use('/uploads/mw_antennas', express.static(path.join(__dirname, 'uploads/mw_antennas')));
 
 // Routes
 const siteLocationRoutes = require('./routes/siteLocationRoutes');
@@ -73,6 +74,7 @@ const NewGPS = require('./models/NewGPS');
 // Health & Safety models
 const HealthSafetySiteAccess = require('./models/HealthSafetySiteAccess');
 const HealthSafetyBTSAccess = require('./models/HealthSafetyBTSAccess');
+const MWAntennasImages = require('./models/MWAntennasImages');
 
 User.hasMany(Survey, { foreignKey: 'user_id', as: 'surveys' });
 User.hasMany(Survey, { foreignKey: 'creator_id', as: 'createdSurveys' });

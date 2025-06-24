@@ -52,6 +52,18 @@ class MWAntennasService {
         const processedData = this.processUpdateData(updateData, numberOfCabinets);
         
         if (record) {
+          // If number of antennas decreased, delete excess antenna images
+          const currentAntennas = record.mw_antennas_data?.how_many_mw_antennas_on_tower || 1;
+          const newAntennas = processedData.mwAntennasData.how_many_mw_antennas_on_tower;
+          
+          if (newAntennas < currentAntennas) {
+            const MWAntennasImageService = require('./MWAntennasImageService');
+            // Delete images for removed antennas
+            for (let i = newAntennas + 1; i <= currentAntennas; i++) {
+              await MWAntennasImageService.deleteImagesBySessionAndNumber(sessionId, i);
+            }
+          }
+
           // Update existing record
           await record.update({
             number_of_cabinets: numberOfCabinets,
@@ -75,7 +87,7 @@ class MWAntennasService {
         });
       }
       
-      return this.transformToApiResponse(record);
+      return await this.transformToApiResponse(record);
       
     } catch (error) {
       throw this.handleError(error);
@@ -90,7 +102,17 @@ class MWAntennasService {
     const howManyMWAntennas = this.validateDropdown(data.how_many_mw_antennas_on_tower, 1, 10);
     
     // Create MW antennas array based on the selected quantity
-    const mwAntennas = this.createMWAntennasArray(data, howManyMWAntennas);
+    const mwAntennas = [];
+    
+    for (let i = 1; i <= howManyMWAntennas; i++) {
+      const antenna = {
+        antenna_number: i,
+        height: this.validateNumber(data[`mw_antenna_${i}_height`] || data.mwAntennasData?.mw_antennas?.[i-1]?.height || 0),
+        diameter: this.validateNumber(data[`mw_antenna_${i}_diameter`] || data.mwAntennasData?.mw_antennas?.[i-1]?.diameter || 0),
+        azimuth: this.validateNumber(data[`mw_antenna_${i}_azimuth`] || data.mwAntennasData?.mw_antennas?.[i-1]?.azimuth || 0)
+      };
+      mwAntennas.push(antenna);
+    }
     
     const processed = {
       mwAntennasData: {
@@ -210,7 +232,7 @@ class MWAntennasService {
   /**
    * Transform database record to API response format
    */
-  static transformToApiResponse(record) {
+  static async transformToApiResponse(record) {
     const data = record.toJSON();
     let mwAntennasData = data.mw_antennas_data;
     
@@ -249,6 +271,20 @@ class MWAntennasService {
       azimuth: antenna.azimuth || 0
     }));
     
+    // Fetch images for each antenna
+    const MWAntennasImageService = require('./MWAntennasImageService');
+    for (let antenna of antennas) {
+      let imgs = await MWAntennasImageService.getImagesBySessionAndNumber(data.session_id, antenna.antenna_number);
+      if (!Array.isArray(imgs)) imgs = [];
+      antenna.images = imgs.length > 0 ? imgs.map(img => ({
+        id: img.id,
+        image_category: img.image_category,
+        file_url: img.file_url,
+        original_filename: img.original_filename,
+        description: img.description
+      })) : [];
+    }
+    
     mwAntennasData = {
       how_many_mw_antennas_on_tower: howManyAntennas,
       mw_antennas: antennas
@@ -274,6 +310,10 @@ class MWAntennasService {
   static async deleteBySessionId(sessionId) {
     try {
       await this.validateSession(sessionId);
+      
+      // Delete all associated images first
+      const MWAntennasImageService = require('./MWAntennasImageService');
+      await MWAntennasImageService.deleteAllImagesBySessionId(sessionId);
       
       const deletedCount = await MWAntennas.destroy({
         where: { session_id: sessionId }

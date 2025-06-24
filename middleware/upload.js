@@ -132,9 +132,25 @@ const uploadMultipleWithErrorHandling = (req, res, next) => {
   });
 };
 
+// Accept any file field (for dynamic antenna fields)
+const uploadAny = upload.any();
+
+const uploadAnyWithErrorHandling = (req, res, next) => {
+  uploadAny(req, res, (err) => {
+    if (err instanceof multer.MulterError) {
+      return res.status(400).json({ error: err.message });
+    }
+    if (err) {
+      return res.status(400).json({ error: err.message });
+    }
+    next();
+  });
+};
+
 module.exports = {
   uploadSingle: uploadSingleWithErrorHandling,
   uploadMultiple: uploadMultipleWithErrorHandling,
   upload, // Raw multer instance if needed
-  imageCategories // Export categories for use in routes
+  imageCategories, // Export categories for use in routes
+  uploadAnyWithErrorHandling,
 }; 
