@@ -1,5 +1,6 @@
 const AntennaStructure = require('../models/AntennaStructure');
 const OutdoorCabinets = require('../models/OutdoorCabinets');
+const AntennaStructureImageService = require('./AntennaStructureImageService');
 
 class AntennaStructureService {
   
@@ -75,7 +76,7 @@ class AntennaStructureService {
         });
       }
       
-      return this.transformToApiResponse(record);
+      return await this.transformToApiResponse(record);
       
     } catch (error) {
       throw this.handleError(error);
@@ -228,9 +229,9 @@ class AntennaStructureService {
   
 
   /**
-   * Transform database record to API response format
+   * Transform database record to API response format (with images)
    */
-  static transformToApiResponse(record) {
+  static async transformToApiResponse(record) {
     const data = record.toJSON();
     let antennaStructureData = data.antenna_structure_data;
     
@@ -253,11 +254,27 @@ class AntennaStructureService {
       earthing_bus_bars_exist: antennaStructureData?.earthing_bus_bars_exist || defaultData.earthing_bus_bars_exist,
       how_many_free_holes_bus_bars: antennaStructureData?.how_many_free_holes_bus_bars || defaultData.how_many_free_holes_bus_bars
     };
+
+    // Get images for this antenna structure
+    let images = [];
+    let imagesGroupedByCategory = {};
+    try {
+      images = await AntennaStructureImageService.getImagesBySessionId(data.session_id);
+      imagesGroupedByCategory = await AntennaStructureImageService.getImagesGroupedByCategory(data.session_id);
+    } catch (imageError) {
+      console.warn(`Could not fetch images for session ${data.session_id}:`, imageError.message);
+    }
     
     return {
       session_id: data.session_id,
       numberOfCabinets: data.number_of_cabinets,
       antennaStructureData: antennaStructureData,
+      images: {
+        total_images: images.length,
+        images_by_category: imagesGroupedByCategory,
+        all_images: images,
+        available_categories: AntennaStructureImageService.getAvailableCategories()
+      },
       metadata: {
         created_at: data.created_at,
         updated_at: data.updated_at,

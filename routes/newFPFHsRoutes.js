@@ -3,78 +3,64 @@ const router = express.Router();
 const NewFPFHs = require('../models/NewFPFHs');
 const NewRadioInstallations = require('../models/NewRadioInstallations');
 
-// Validation helper for new FPFHs data
-const validateNewFPFHData = (data) => {
-  const validInstallationTypes = ['Stacked with other Nokia modules', 'Standalone', 'Other'];
-  const validLocations = ['On ground', 'On tower'];
-  const validTowerLegs = ['A', 'B', 'C', 'D'];
-  const validDcPowerSources = ['from new DC rectifier cabinet', 'from the existing rectifier cabinet', 'Existing external DC PDU #1', 'Existing external DC PDU #2', 'Existing external DC PDU #n'];
-  const validDcDistributionSources = ['BLVD', 'LLVD', 'PDU'];
-  const validYesNo = ['Yes', 'No'];
-
-  // Validate enum fields
-  if (data.fpfh_installation_type && !validInstallationTypes.includes(data.fpfh_installation_type)) {
-    throw new Error(`Invalid fpfh_installation_type: ${data.fpfh_installation_type}`);
+// Simple data converter for database compatibility (no validation)
+const convertDataForDB = (data) => {
+  const converted = { ...data };
+  
+  // Ensure fpfh_index is properly set and is a number
+  if (converted.fpfh_index) {
+    converted.fpfh_index = parseInt(converted.fpfh_index);
   }
   
-  if (data.fpfh_location && !validLocations.includes(data.fpfh_location)) {
-    throw new Error(`Invalid fpfh_location: ${data.fpfh_location}`);
-  }
-  
-  if (data.fpfh_tower_leg && !validTowerLegs.includes(data.fpfh_tower_leg)) {
-    throw new Error(`Invalid fpfh_tower_leg: ${data.fpfh_tower_leg}`);
-  }
-  
-  if (data.fpfh_dc_power_source && !validDcPowerSources.includes(data.fpfh_dc_power_source)) {
-    throw new Error(`Invalid fpfh_dc_power_source: ${data.fpfh_dc_power_source}`);
-  }
-  
-  if (data.dc_distribution_source && !validDcDistributionSources.includes(data.dc_distribution_source)) {
-    throw new Error(`Invalid dc_distribution_source: ${data.dc_distribution_source}`);
-  }
-  
-  if (data.earth_bus_bar_exists && !validYesNo.includes(data.earth_bus_bar_exists)) {
-    throw new Error(`Invalid earth_bus_bar_exists: ${data.earth_bus_bar_exists}`);
-  }
-
-  // Validate numeric fields
+  // Convert empty strings to null for numeric fields to prevent database errors
   const numericFields = [
     'fpfh_number', 'fpfh_base_height', 'ethernet_cable_length',
     'dc_power_cable_length', 'earth_cable_length'
   ];
   
   numericFields.forEach(field => {
-    if (data[field] !== undefined && data[field] !== null && data[field] !== '') {
-      if (isNaN(data[field]) || data[field] < 0) {
-        throw new Error(`${field} must be a positive number`);
-      }
+    if (converted[field] === '' || converted[field] === undefined || converted[field] === null) {
+      converted[field] = null;
+    } else if (converted[field] && !isNaN(converted[field])) {
+      // Convert valid numbers to proper format
+      converted[field] = parseFloat(converted[field]);
     }
   });
 
-  // Validate fpfh_index
-  if (data.fpfh_index !== undefined) {
-    if (!Number.isInteger(data.fpfh_index) || data.fpfh_index < 1) {
-      throw new Error('fpfh_index must be a positive integer');
+  // Convert empty strings to null for ENUM-like fields to prevent database errors
+  const enumFields = [
+    'fpfh_installation_type', 'fpfh_location', 'fpfh_tower_leg',
+    'fpfh_dc_power_source', 'dc_distribution_source', 'earth_bus_bar_exists'
+  ];
+  
+  enumFields.forEach(field => {
+    if (converted[field] === '' || converted[field] === undefined) {
+      converted[field] = null;
     }
-  }
+  });
+
+  // Remove any undefined or null keys to clean up the object
+  Object.keys(converted).forEach(key => {
+    if (converted[key] === undefined) {
+      delete converted[key];
+    }
+  });
+
+  return converted;
 };
 
 // Helper function to get planning data from NewRadioInstallations
-const getPlanningData = async (sessionId) => {
+const getNewFPFHInstalled = async (sessionId) => {
   try {
     const radioInstallations = await NewRadioInstallations.findOne({
       where: { session_id: sessionId },
       attributes: ['new_fpfh_installed']
     });
     
-    return {
-      new_fpfh_installed: radioInstallations ? radioInstallations.new_fpfh_installed : 1
-    };
+    return  radioInstallations ? radioInstallations.new_fpfh_installed : 1;
   } catch (error) {
     console.warn(`Could not fetch planning data for session ${sessionId}:`, error.message);
-    return {
-      new_fpfh_installed: 1
-    };
+    return  1;
   }
 };
 
@@ -135,28 +121,30 @@ const formatFPFHData = (fpfh, sessionId, fpfhIndex) => {
 };
 
 // GET /api/new-fpfh/:session_id
-// Returns only FPFHs that exist for this session
+// Returns array based on new_fpfh_installed count with empty objects for missing ones
 router.get('/:session_id', async (req, res) => {
   try {
     const { session_id } = req.params;
     
-    // Get planning data and existing FPFHs data in parallel
-    const [planningData, existingFPFHs] = await Promise.all([
-      getPlanningData(session_id),
-      NewFPFHs.findAll({
-        where: { session_id },
-        order: [['fpfh_index', 'ASC']]
-      })
-    ]);
+    // Get the planned FPFH count
+    const newFPFHInstalled = await getNewFPFHInstalled(session_id);
+     
+    // Get existing FPFHs for this session
+    const existingFPFHs = await NewFPFHs.findAll({
+      where: { session_id },
+      order: [['fpfh_index', 'ASC']]
+    });
 
-    // Format existing FPFHs with default values
-    const formattedFPFHs = existingFPFHs.map(fpfh => 
-      formatFPFHData(fpfh, session_id, fpfh.fpfh_index)
-    );
+    // Create array with the expected number of FPFHs (filling missing ones with empty data)
+    const formattedFPFHs = [];
+    for (let i = 1; i <= newFPFHInstalled; i++) {
+      const existingFPFH = existingFPFHs.find(fpfh => fpfh.fpfh_index === i);
+      formattedFPFHs.push(formatFPFHData(existingFPFH, session_id, i));
+    }
 
     res.json({
       session_id,
-      ...planningData,
+      new_fpfh_installed: newFPFHInstalled,
       fpfhs: formattedFPFHs,
       total_fpfhs: formattedFPFHs.length
     });
@@ -201,12 +189,8 @@ router.post('/:session_id/:fpfh_index', async (req, res) => {
       return res.status(400).json({ error: 'fpfh_index must be a positive integer' });
     }
 
-    // Validate FPFH data
-    try {
-      validateNewFPFHData(fpfhData);
-    } catch (error) {
-      return res.status(400).json({ error: error.message });
-    }
+    // Convert data for database compatibility
+    const convertedData = convertDataForDB(fpfhData);
 
     // Check if FPFH already exists
     let fpfh = await NewFPFHs.findOne({
@@ -218,7 +202,7 @@ router.post('/:session_id/:fpfh_index', async (req, res) => {
 
     if (fpfh) {
       // Update existing FPFH
-      await fpfh.update(fpfhData);
+      await fpfh.update(convertedData);
       res.json({
         message: `FPFH ${index} updated successfully`,
         data: formatFPFHData(fpfh, session_id, index)
@@ -228,7 +212,7 @@ router.post('/:session_id/:fpfh_index', async (req, res) => {
       fpfh = await NewFPFHs.create({
         session_id,
         fpfh_index: index,
-        ...fpfhData
+        ...convertedData
       });
       res.status(201).json({
         message: `FPFH ${index} created successfully`,
@@ -258,9 +242,9 @@ router.put('/:session_id', async (req, res) => {
       const fpfhIndex = fpfhData.fpfh_index || (i + 1);
 
       try {
-        // Validate FPFH data
-        validateNewFPFHData(fpfhData);
-
+        // Convert data for database compatibility
+        const convertedData = convertDataForDB(fpfhData);
+       
         // Check if FPFH exists
         let fpfh = await NewFPFHs.findOne({
           where: { 
@@ -271,13 +255,13 @@ router.put('/:session_id', async (req, res) => {
 
         if (fpfh) {
           // Update existing FPFH
-          await fpfh.update(fpfhData);
+          await fpfh.update(convertedData);
         } else {
           // Create new FPFH
           fpfh = await NewFPFHs.create({
             session_id,
             fpfh_index: fpfhIndex,
-            ...fpfhData
+            ...convertedData
           });
         }
 
@@ -295,13 +279,8 @@ router.put('/:session_id', async (req, res) => {
       }
     }
 
-    // Get planning data for response
-    const planningData = await getPlanningData(session_id);
-
     res.json({
       message: `Processed ${fpfhsArray.length} FPFHs for session ${session_id}`,
-      session_id,
-      ...planningData,
       results
     });
   } catch (error) {
@@ -320,12 +299,8 @@ router.put('/:session_id/:fpfh_index', async (req, res) => {
       return res.status(400).json({ error: 'fpfh_index must be a positive integer' });
     }
 
-    // Validate FPFH data
-    try {
-      validateNewFPFHData(fpfhData);
-    } catch (error) {
-      return res.status(400).json({ error: error.message });
-    }
+    // Convert data for database compatibility
+    const convertedData = convertDataForDB(fpfhData);
 
     let fpfh = await NewFPFHs.findOne({
       where: { 
@@ -339,11 +314,11 @@ router.put('/:session_id/:fpfh_index', async (req, res) => {
       fpfh = await NewFPFHs.create({
         session_id,
         fpfh_index: index,
-        ...fpfhData
+        ...convertedData
       });
     } else {
       // Update existing FPFH (complete replacement)
-      await fpfh.update(fpfhData);
+      await fpfh.update(convertedData);
     }
 
     res.json({
@@ -366,12 +341,8 @@ router.patch('/:session_id/:fpfh_index', async (req, res) => {
       return res.status(400).json({ error: 'fpfh_index must be a positive integer' });
     }
 
-    // Validate update data
-    try {
-      validateNewFPFHData(updateData);
-    } catch (error) {
-      return res.status(400).json({ error: error.message });
-    }
+    // Convert data for database compatibility
+    const convertedData = convertDataForDB(updateData);
 
     let fpfh = await NewFPFHs.findOne({
       where: { 
@@ -385,11 +356,11 @@ router.patch('/:session_id/:fpfh_index', async (req, res) => {
       fpfh = await NewFPFHs.create({
         session_id,
         fpfh_index: index,
-        ...updateData
+        ...convertedData
       });
     } else {
       // Only update provided fields
-      await fpfh.update(updateData);
+      await fpfh.update(convertedData);
     }
 
     res.json({
@@ -477,5 +448,4 @@ router.get('/:session_id/config', async (req, res) => {
   }
 });
 
-module.exports = router; 
 module.exports = router; 

@@ -3,56 +3,16 @@ const router = express.Router();
 const NewRadioUnits = require('../models/NewRadioUnits');
 const NewRadioInstallations = require('../models/NewRadioInstallations');
 
-// Validation helper for new radio units data
-const validateNewRadioUnitData = (data) => {
-  const validSectors = ['1', '2', '3', '4', '5', '6'];
-  const validAntennaConnection = ['New', 'Existing'];
-  const validTechnologies = ['2G', '3G', '4G', '5G'];
-  const validLocations = ['Tower leg A', 'Tower leg B', 'Tower leg C', 'Tower leg D', 'On the ground'];
-  const validTowerSections = ['Angular', 'Tubular'];
-  const validSideArmTypes = ['Use existing empty side arm', 'Use existing antenna side arm', 'New side arm need to be supplied'];
-  const validDcPowerSources = ['Direct from rectifier distribution', 'New FPFH', 'Existing FPFH', 'Existing DC PDU (not FPFH)'];
-  const validYesNo = ['Yes', 'No'];
-
-  // Validate enum fields
-  if (data.new_radio_unit_sector && !validSectors.includes(data.new_radio_unit_sector)) {
-    throw new Error(`Invalid new_radio_unit_sector: ${data.new_radio_unit_sector}`);
+// Simple data converter for database compatibility (no validation)
+const convertDataForDB = (data) => {
+  const converted = { ...data };
+  
+  // Ensure radio_unit_index is properly set and is a number
+  if (converted.radio_unit_index) {
+    converted.radio_unit_index = parseInt(converted.radio_unit_index);
   }
   
-  if (data.connected_to_antenna && !validAntennaConnection.includes(data.connected_to_antenna)) {
-    throw new Error(`Invalid connected_to_antenna: ${data.connected_to_antenna}`);
-  }
-  
-  if (data.radio_unit_location && !validLocations.includes(data.radio_unit_location)) {
-    throw new Error(`Invalid radio_unit_location: ${data.radio_unit_location}`);
-  }
-  
-  if (data.tower_leg_section && !validTowerSections.includes(data.tower_leg_section)) {
-    throw new Error(`Invalid tower_leg_section: ${data.tower_leg_section}`);
-  }
-  
-  if (data.side_arm_type && !validSideArmTypes.includes(data.side_arm_type)) {
-    throw new Error(`Invalid side_arm_type: ${data.side_arm_type}`);
-  }
-  
-  if (data.dc_power_source && !validDcPowerSources.includes(data.dc_power_source)) {
-    throw new Error(`Invalid dc_power_source: ${data.dc_power_source}`);
-  }
-  
-  if (data.earth_bus_bar_exists && !validYesNo.includes(data.earth_bus_bar_exists)) {
-    throw new Error(`Invalid earth_bus_bar_exists: ${data.earth_bus_bar_exists}`);
-  }
-
-  // Validate connected antenna technology array
-  if (data.connected_antenna_technology && Array.isArray(data.connected_antenna_technology)) {
-    data.connected_antenna_technology.forEach(tech => {
-      if (!validTechnologies.includes(tech)) {
-        throw new Error(`Invalid connected_antenna_technology: ${tech}`);
-      }
-    });
-  }
-
-  // Validate numeric fields
+  // Convert empty strings to null for numeric fields to prevent database errors
   const numericFields = [
     'radio_unit_number', 'feeder_length_to_antenna', 'angular_l1_dimension',
     'angular_l2_dimension', 'tubular_cross_section', 'side_arm_length',
@@ -61,76 +21,95 @@ const validateNewRadioUnitData = (data) => {
   ];
   
   numericFields.forEach(field => {
-    if (data[field] !== undefined && data[field] !== null && data[field] !== '') {
-      if (isNaN(data[field]) || data[field] < 0) {
-        throw new Error(`${field} must be a positive number`);
-      }
+    if (converted[field] === '' || converted[field] === undefined || converted[field] === null) {
+      converted[field] = null;
+    } else if (converted[field] && !isNaN(converted[field])) {
+      // Convert valid numbers to proper format
+      converted[field] = parseFloat(converted[field]);
     }
   });
 
-  // Validate radio_unit_index
-  if (data.radio_unit_index !== undefined && data.radio_unit_index !== null) {
-    if (!Number.isInteger(data.radio_unit_index) || data.radio_unit_index < 1) {
-      throw new Error('radio_unit_index must be a positive integer starting from 1');
+  // Convert empty strings to null for ENUM-like fields to prevent database errors
+  const enumFields = [
+    'new_radio_unit_sector', 'connected_to_antenna', 'radio_unit_location',
+    'tower_leg_section', 'side_arm_type', 'dc_power_source', 'earth_bus_bar_exists'
+  ];
+  
+  enumFields.forEach(field => {
+    if (converted[field] === '' || converted[field] === undefined) {
+      converted[field] = null;
     }
+  });
+
+  // Handle connected_antenna_technology array
+  if (converted.connected_antenna_technology && !Array.isArray(converted.connected_antenna_technology)) {
+    converted.connected_antenna_technology = [];
   }
+
+  // Remove any undefined or null keys to clean up the object
+  Object.keys(converted).forEach(key => {
+    if (converted[key] === undefined) {
+      delete converted[key];
+    }
+  });
+
+  return converted;
 };
 
-// Helper function to get planning data from NewRadioInstallations
-const getPlanningData = async (sessionId) => {
+// Helper function to get new_radio_units_planned from NewRadioInstallations
+const getNewRadioUnitsPlanned = async (sessionId) => {
   try {
     const radioInstallations = await NewRadioInstallations.findOne({
       where: { session_id: sessionId },
-      attributes: ['new_radio_units_planned', 'existing_radio_units_swapped']
+      attributes: ['new_radio_units_planned']
     });
     
-    return {
-      new_radio_units_planned: radioInstallations ? radioInstallations.new_radio_units_planned : 1,
-      existing_radio_units_swapped: radioInstallations ? radioInstallations.existing_radio_units_swapped : 1
-    };
+    return radioInstallations ? radioInstallations.new_radio_units_planned : 1;
   } catch (error) {
-    console.warn(`Could not fetch planning data for session ${sessionId}:`, error.message);
-    return {
-      new_radio_units_planned: 1,
-      existing_radio_units_swapped: 1
-    };
+    console.warn(`Could not fetch new_radio_units_planned for session ${sessionId}:`, error.message);
+    return 1;
   }
 };
 
-// Helper function to format radio units data with default empty strings
-const formatRadioUnitsData = (radioUnits, sessionId) => {
-  if (!radioUnits) {
-    return {
-      id: null,
-      session_id: sessionId,
-      radio_unit_index: 1,
-      radio_unit_number: '',
-      new_radio_unit_sector: '',
-      connected_to_antenna: '',
-      connected_antenna_technology: [],
-      new_radio_unit_model: '',
-      radio_unit_location: '',
-      feeder_length_to_antenna: '',
-      tower_leg_section: '',
-      angular_l1_dimension: '',
-      angular_l2_dimension: '',
-      tubular_cross_section: '',
-      side_arm_type: '',
-      side_arm_length: '',
-      side_arm_cross_section: '',
-      side_arm_offset: '',
-      dc_power_source: '',
-      dc_power_cable_length: '',
-      fiber_cable_length: '',
-      jumper_length: '',
-      earth_bus_bar_exists: '',
-      earth_cable_length: '',
-      created_at: null,
-      updated_at: null
-    };
+// Helper function to create default empty radio unit data
+const getDefaultRadioUnitData = (sessionId, radioUnitIndex) => {
+  return {
+    id: null,
+    session_id: sessionId,
+    radio_unit_index: radioUnitIndex,
+    radio_unit_number: '',
+    new_radio_unit_sector: '',
+    connected_to_antenna: '',
+    connected_antenna_technology: [],
+    new_radio_unit_model: '',
+    radio_unit_location: '',
+    feeder_length_to_antenna: '',
+    tower_leg_section: '',
+    angular_l1_dimension: '',
+    angular_l2_dimension: '',
+    tubular_cross_section: '',
+    side_arm_type: '',
+    side_arm_length: '',
+    side_arm_cross_section: '',
+    side_arm_offset: '',
+    dc_power_source: '',
+    dc_power_cable_length: '',
+    fiber_cable_length: '',
+    jumper_length: '',
+    earth_bus_bar_exists: '',
+    earth_cable_length: '',
+    created_at: null,
+    updated_at: null
+  };
+};
+
+// Helper function to format radio unit data with default empty strings
+const formatRadioUnitData = (radioUnit, sessionId, radioUnitIndex) => {
+  if (!radioUnit) {
+    return getDefaultRadioUnitData(sessionId, radioUnitIndex);
   }
 
-  const data = radioUnits.toJSON();
+  const data = radioUnit.toJSON();
   
   // Convert null values to empty strings for string fields
   const stringFields = [
@@ -166,188 +145,210 @@ const formatRadioUnitsData = (radioUnits, sessionId) => {
   return data;
 };
 
-// Helper function to format multiple radio units data
-const formatMultipleRadioUnitsData = (radioUnitsArray, sessionId, plannedCount) => {
-  const result = [];
-  
-  // Create a map of existing radio units by index
-  const existingUnitsMap = new Map();
-  if (radioUnitsArray && radioUnitsArray.length > 0) {
-    radioUnitsArray.forEach(unit => {
-      existingUnitsMap.set(unit.radio_unit_index, unit);
-    });
-  }
-  
-  // Generate data for all planned radio units
-  for (let i = 1; i <= plannedCount; i++) {
-    const existingUnit = existingUnitsMap.get(i);
-    result.push(formatRadioUnitsData(existingUnit, sessionId));
-  }
-  
-  return result;
-};
-
 // GET /api/new-radio-units/:session_id
+// Returns array based on new_radio_units_planned count with empty objects for missing ones
 router.get('/:session_id', async (req, res) => {
   try {
     const { session_id } = req.params;
     
-    // Get planning data and existing radio units data in parallel
-    const [planningData, radioUnits] = await Promise.all([
-      getPlanningData(session_id),
-      NewRadioUnits.findAll({ 
+    // Get the planned radio unit count and existing radio units
+    const [newRadioUnitsPlanned, existingRadioUnits] = await Promise.all([
+      getNewRadioUnitsPlanned(session_id),
+      NewRadioUnits.findAll({
         where: { session_id },
         order: [['radio_unit_index', 'ASC']]
       })
     ]);
 
-    const formattedData = formatMultipleRadioUnitsData(
-      radioUnits, 
-      session_id, 
-      planningData.new_radio_units_planned
-    );
+    // Create array with the expected number of radio units (filling missing ones with empty data)
+    const formattedRadioUnits = [];
+    for (let i = 1; i <= newRadioUnitsPlanned; i++) {
+      const existingRadioUnit = existingRadioUnits.find(unit => unit.radio_unit_index === i);
+      formattedRadioUnits.push(formatRadioUnitData(existingRadioUnit, session_id, i));
+    }
 
     res.json({
       session_id,
-      ...planningData,
-      data: formattedData,
-      has_data: radioUnits && radioUnits.length > 0
+      new_radio_units_planned: newRadioUnitsPlanned,
+      radio_units: formattedRadioUnits,
+      total_radio_units: formattedRadioUnits.length
     });
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
 });
 
-// PUT /api/new-radio-units/:session_id
-// Handle both single object and array of objects
+// GET /api/new-radio-units/:session_id/:radio_unit_index
+// Returns specific radio unit or default empty data if not exists
+router.get('/:session_id/:radio_unit_index', async (req, res) => {
+  try {
+    const { session_id, radio_unit_index } = req.params;
+    const index = parseInt(radio_unit_index);
+
+    if (isNaN(index) || index < 1) {
+      return res.status(400).json({ error: 'radio_unit_index must be a positive integer' });
+    }
+
+    const radioUnit = await NewRadioUnits.findOne({
+      where: { 
+        session_id,
+        radio_unit_index: index
+      }
+    });
+
+    const formattedData = formatRadioUnitData(radioUnit, session_id, index);
+    res.json(formattedData);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// POST /api/new-radio-units/:session_id/:radio_unit_index
+router.post('/:session_id/:radio_unit_index', async (req, res) => {
+  try {
+    const { session_id, radio_unit_index } = req.params;
+    const radioUnitData = req.body;
+    const index = parseInt(radio_unit_index);
+
+    if (isNaN(index) || index < 1) {
+      return res.status(400).json({ error: 'radio_unit_index must be a positive integer' });
+    }
+
+    // Convert data for database compatibility
+    const convertedData = convertDataForDB(radioUnitData);
+
+    // Check if radio unit already exists
+    let radioUnit = await NewRadioUnits.findOne({
+      where: { 
+        session_id,
+        radio_unit_index: index
+      }
+    });
+
+    if (radioUnit) {
+      // Update existing radio unit
+      await radioUnit.update(convertedData);
+      res.json({
+        message: `Radio unit ${index} updated successfully`,
+        data: formatRadioUnitData(radioUnit, session_id, index)
+      });
+    } else {
+      // Create new radio unit
+      radioUnit = await NewRadioUnits.create({
+        session_id,
+        radio_unit_index: index,
+        ...convertedData
+      });
+      res.status(201).json({
+        message: `Radio unit ${index} created successfully`,
+        data: formatRadioUnitData(radioUnit, session_id, index)
+      });
+    }
+  } catch (error) {
+    res.status(400).json({ error: error.message });
+  }
+});
+
+// PUT /api/new-radio-units/:session_id (bulk update/create radio units array)
 router.put('/:session_id', async (req, res) => {
   try {
     const { session_id } = req.params;
-    const requestData = req.body;
+    const radioUnitsArray = req.body.radio_units || [];
 
-    // Determine if we're dealing with single object or array
-    const radioUnitsArray = Array.isArray(requestData) ? requestData : [requestData];
-
-    // Validate all radio units data
-    radioUnitsArray.forEach((radioUnitsData, index) => {
-      try {
-        validateNewRadioUnitData(radioUnitsData);
-      } catch (error) {
-        throw new Error(`Validation error for radio unit ${index + 1}: ${error.message}`);
-      }
-    });
-
-    // Delete existing radio units for this session
-    await NewRadioUnits.destroy({
-      where: { session_id }
-    });
-
-    // Create new radio units
-    const createdUnits = [];
-    for (let i = 0; i < radioUnitsArray.length; i++) {
-      const radioUnitsData = radioUnitsArray[i];
-      
-      // Ensure radio_unit_index is set
-      if (!radioUnitsData.radio_unit_index) {
-        radioUnitsData.radio_unit_index = i + 1;
-      }
-
-      const radioUnit = await NewRadioUnits.create({
-        session_id,
-        ...radioUnitsData
-      });
-      createdUnits.push(radioUnit);
+    if (!Array.isArray(radioUnitsArray)) {
+      return res.status(400).json({ error: 'Request body must contain a radio_units array' });
     }
 
-    // Get planning data for response
-    const planningData = await getPlanningData(session_id);
+    const results = [];
 
-    const formattedData = formatMultipleRadioUnitsData(
-      createdUnits, 
-      session_id, 
-      planningData.new_radio_units_planned
-    );
+    // Process each radio unit in the array
+    for (let i = 0; i < radioUnitsArray.length; i++) {
+      const radioUnitData = radioUnitsArray[i];
+      const radioUnitIndex = radioUnitData.radio_unit_index || (i + 1);
+
+      try {
+        // Convert data for database compatibility
+        const convertedData = convertDataForDB(radioUnitData);
+       
+        // Check if radio unit exists
+        let radioUnit = await NewRadioUnits.findOne({
+          where: { 
+            session_id,
+            radio_unit_index: radioUnitIndex
+          }
+        });
+
+        if (radioUnit) {
+          // Update existing radio unit
+          await radioUnit.update(convertedData);
+        } else {
+          // Create new radio unit
+          radioUnit = await NewRadioUnits.create({
+            session_id,
+            radio_unit_index: radioUnitIndex,
+            ...convertedData
+          });
+        }
+
+        results.push({
+          radio_unit_index: radioUnitIndex,
+          status: 'success',
+          data: formatRadioUnitData(radioUnit, session_id, radioUnitIndex)
+        });
+      } catch (error) {
+        results.push({
+          radio_unit_index: radioUnitIndex,
+          status: 'error',
+          error: error.message
+        });
+      }
+    }
 
     res.json({
-      message: `New radio units for session ${session_id} updated successfully`,
-      session_id,
-      ...planningData,
-      data: formattedData,
-      units_created: createdUnits.length
+      message: `Processed ${radioUnitsArray.length} radio units for session ${session_id}`,
+      results
     });
   } catch (error) {
     res.status(400).json({ error: error.message });
   }
 });
 
-// PATCH /api/new-radio-units/:session_id
-// Handle partial updates for multiple radio units
-router.patch('/:session_id', async (req, res) => {
+// PUT /api/new-radio-units/:session_id/:radio_unit_index
+router.put('/:session_id/:radio_unit_index', async (req, res) => {
   try {
-    const { session_id } = req.params;
-    const requestData = req.body;
+    const { session_id, radio_unit_index } = req.params;
+    const radioUnitData = req.body;
+    const index = parseInt(radio_unit_index);
 
-    // Determine if we're dealing with single object or array
-    const updateArray = Array.isArray(requestData) ? requestData : [requestData];
-
-    // Validate all update data
-    updateArray.forEach((updateData, index) => {
-      try {
-        validateNewRadioUnitData(updateData);
-      } catch (error) {
-        throw new Error(`Validation error for radio unit ${index + 1}: ${error.message}`);
-      }
-    });
-
-    const updatedUnits = [];
-    for (let i = 0; i < updateArray.length; i++) {
-      const updateData = updateArray[i];
-      
-      // Determine radio_unit_index
-      const radioUnitIndex = updateData.radio_unit_index || (i + 1);
-
-      let radioUnit = await NewRadioUnits.findOne({
-        where: { 
-          session_id,
-          radio_unit_index: radioUnitIndex
-        }
-      });
-
-      if (!radioUnit) {
-        // Create new radio unit with provided data
-        radioUnit = await NewRadioUnits.create({
-          session_id,
-          radio_unit_index: radioUnitIndex,
-          ...updateData
-        });
-      } else {
-        // Only update provided fields
-        await radioUnit.update(updateData);
-      }
-      updatedUnits.push(radioUnit);
+    if (isNaN(index) || index < 1) {
+      return res.status(400).json({ error: 'radio_unit_index must be a positive integer' });
     }
 
-    // Get all radio units for response
-    const allRadioUnits = await NewRadioUnits.findAll({ 
-      where: { session_id },
-      order: [['radio_unit_index', 'ASC']]
+    // Convert data for database compatibility
+    const convertedData = convertDataForDB(radioUnitData);
+
+    let radioUnit = await NewRadioUnits.findOne({
+      where: { 
+        session_id,
+        radio_unit_index: index
+      }
     });
 
-    // Get planning data for response
-    const planningData = await getPlanningData(session_id);
-
-    const formattedData = formatMultipleRadioUnitsData(
-      allRadioUnits, 
-      session_id, 
-      planningData.new_radio_units_planned
-    );
+    if (!radioUnit) {
+      // Create new radio unit if it doesn't exist
+      radioUnit = await NewRadioUnits.create({
+        session_id,
+        radio_unit_index: index,
+        ...convertedData
+      });
+    } else {
+      // Update existing radio unit (complete replacement)
+      await radioUnit.update(convertedData);
+    }
 
     res.json({
-      message: `New radio units for session ${session_id} partially updated successfully`,
-      session_id,
-      ...planningData,
-      data: formattedData,
-      units_updated: updatedUnits.length
+      message: `Radio unit ${index} updated successfully`,
+      data: formatRadioUnitData(radioUnit, session_id, index)
     });
   } catch (error) {
     res.status(400).json({ error: error.message });
@@ -355,31 +356,23 @@ router.patch('/:session_id', async (req, res) => {
 });
 
 // PATCH /api/new-radio-units/:session_id/:radio_unit_index
-// Update specific radio unit by index
 router.patch('/:session_id/:radio_unit_index', async (req, res) => {
   try {
     const { session_id, radio_unit_index } = req.params;
     const updateData = req.body;
+    const index = parseInt(radio_unit_index);
 
-    // Validate radio_unit_index
-    const unitIndex = parseInt(radio_unit_index);
-    if (!Number.isInteger(unitIndex) || unitIndex < 1) {
-      return res.status(400).json({ 
-        error: 'radio_unit_index must be a positive integer starting from 1' 
-      });
+    if (isNaN(index) || index < 1) {
+      return res.status(400).json({ error: 'radio_unit_index must be a positive integer' });
     }
 
-    // Validate update data
-    try {
-      validateNewRadioUnitData(updateData);
-    } catch (error) {
-      return res.status(400).json({ error: error.message });
-    }
+    // Convert data for database compatibility
+    const convertedData = convertDataForDB(updateData);
 
     let radioUnit = await NewRadioUnits.findOne({
       where: { 
         session_id,
-        radio_unit_index: unitIndex
+        radio_unit_index: index
       }
     });
 
@@ -387,26 +380,53 @@ router.patch('/:session_id/:radio_unit_index', async (req, res) => {
       // Create new radio unit with provided data
       radioUnit = await NewRadioUnits.create({
         session_id,
-        radio_unit_index: unitIndex,
-        ...updateData
+        radio_unit_index: index,
+        ...convertedData
       });
     } else {
       // Only update provided fields
-      await radioUnit.update(updateData);
+      await radioUnit.update(convertedData);
     }
 
-    // Get planning data for response
-    const planningData = await getPlanningData(session_id);
-
     res.json({
-      message: `Radio unit ${unitIndex} for session ${session_id} updated successfully`,
-      session_id,
-      radio_unit_index: unitIndex,
-      ...planningData,
-      data: formatRadioUnitsData(radioUnit, session_id)
+      message: `Radio unit ${index} partially updated successfully`,
+      data: formatRadioUnitData(radioUnit, session_id, index)
     });
   } catch (error) {
     res.status(400).json({ error: error.message });
+  }
+});
+
+// DELETE /api/new-radio-units/:session_id/:radio_unit_index
+router.delete('/:session_id/:radio_unit_index', async (req, res) => {
+  try {
+    const { session_id, radio_unit_index } = req.params;
+    const index = parseInt(radio_unit_index);
+
+    if (isNaN(index) || index < 1) {
+      return res.status(400).json({ error: 'radio_unit_index must be a positive integer' });
+    }
+
+    const radioUnit = await NewRadioUnits.findOne({
+      where: { 
+        session_id,
+        radio_unit_index: index
+      }
+    });
+
+    if (!radioUnit) {
+      return res.status(404).json({ 
+        error: `Radio unit ${index} not found for session ${session_id}` 
+      });
+    }
+
+    await radioUnit.destroy();
+
+    res.json({
+      message: `Radio unit ${index} deleted successfully`
+    });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
   }
 });
 
@@ -419,14 +439,8 @@ router.delete('/:session_id', async (req, res) => {
       where: { session_id }
     });
 
-    if (deletedCount === 0) {
-      return res.status(404).json({ 
-        error: `No radio units found for session ${session_id}` 
-      });
-    }
-
     res.json({
-      message: `${deletedCount} radio units for session ${session_id} deleted successfully`,
+      message: `All radio units for session ${session_id} deleted successfully`,
       deleted_count: deletedCount
     });
   } catch (error) {
@@ -434,43 +448,8 @@ router.delete('/:session_id', async (req, res) => {
   }
 });
 
-// DELETE /api/new-radio-units/:session_id/:radio_unit_index
-// Delete specific radio unit by index
-router.delete('/:session_id/:radio_unit_index', async (req, res) => {
-  try {
-    const { session_id, radio_unit_index } = req.params;
-
-    // Validate radio_unit_index
-    const unitIndex = parseInt(radio_unit_index);
-    if (!Number.isInteger(unitIndex) || unitIndex < 1) {
-      return res.status(400).json({ 
-        error: 'radio_unit_index must be a positive integer starting from 1' 
-      });
-    }
-
-    const deletedCount = await NewRadioUnits.destroy({
-      where: { 
-        session_id,
-        radio_unit_index: unitIndex
-      }
-    });
-
-    if (deletedCount === 0) {
-      return res.status(404).json({ 
-        error: `Radio unit ${unitIndex} not found for session ${session_id}` 
-      });
-    }
-
-    res.json({
-      message: `Radio unit ${unitIndex} for session ${session_id} deleted successfully`
-    });
-  } catch (error) {
-    res.status(500).json({ error: error.message });
-  }
-});
-
 // GET /api/new-radio-units/:session_id/config
-// Returns configuration data including planning information
+// Returns configuration data including new_radio_units_planned
 router.get('/:session_id/config', async (req, res) => {
   try {
     const { session_id } = req.params;
@@ -487,8 +466,7 @@ router.get('/:session_id/config', async (req, res) => {
       session_id,
       new_radio_units_planned: radioInstallations ? radioInstallations.new_radio_units_planned : 1,
       existing_radio_units_swapped: radioInstallations ? radioInstallations.existing_radio_units_swapped : 1,
-      radio_units_count: radioUnitsCount,
-      has_radio_units_data: radioUnitsCount > 0,
+      current_radio_units_count: radioUnitsCount,
       has_radio_installations_data: !!radioInstallations
     });
   } catch (error) {

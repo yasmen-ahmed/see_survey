@@ -1,6 +1,7 @@
 require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
+const path = require('path');
 const app = express();
 const PORT = process.env.PORT || 3000;
 const authMiddleware = require('./middleware/authMiddleware');
@@ -18,6 +19,9 @@ app.use(cors({
 }));
 
 app.use(express.json());
+
+// Serve static files for uploaded images
+app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
 // Routes
 const siteLocationRoutes = require('./routes/siteLocationRoutes');
@@ -56,6 +60,7 @@ const SiteVisitInfo = require('./models/SiteVisitInfo');
 const TransmissionMW = require('./models/TransmissionMW');
 const DCPowerSystem = require('./models/DCPowerSystem');
 const AntennaStructure = require('./models/AntennaStructure');
+const AntennaStructureImages = require('./models/AntennaStructureImages');
 const MWAntennas = require('./models/MWAntennas');
 const ExternalDCDistribution = require('./models/ExternalDCDistribution');
 const AntennaConfiguration = require('./models/AntennaConfiguration');
@@ -83,6 +88,13 @@ Survey.hasOne(RadioUnits, { foreignKey: 'session_id', sourceKey: 'session_id', a
 RadioUnits.belongsTo(Survey, { foreignKey: 'session_id', targetKey: 'session_id' });
 Survey.hasOne(NewRadioInstallations, { foreignKey: 'session_id', sourceKey: 'session_id', as: 'newRadioInstallations' });
 NewRadioInstallations.belongsTo(Survey, { foreignKey: 'session_id', targetKey: 'session_id' });
+
+// AntennaStructure and AntennaStructureImages associations
+Survey.hasOne(AntennaStructure, { foreignKey: 'session_id', sourceKey: 'session_id', as: 'antennaStructure' });
+AntennaStructure.belongsTo(Survey, { foreignKey: 'session_id', targetKey: 'session_id' });
+AntennaStructure.hasMany(AntennaStructureImages, { foreignKey: 'session_id', sourceKey: 'session_id', as: 'images' });
+AntennaStructureImages.belongsTo(AntennaStructure, { foreignKey: 'session_id', targetKey: 'session_id' });
+
 // Simplified associations without foreign key constraints to avoid index limits
 NewRadioInstallations.hasMany(NewAntennas, { foreignKey: 'session_id', sourceKey: 'session_id', as: 'newAntennas', constraints: false });
 NewAntennas.belongsTo(NewRadioInstallations, { foreignKey: 'session_id', targetKey: 'session_id', constraints: false });
