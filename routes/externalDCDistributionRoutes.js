@@ -2,145 +2,9 @@ const express = require('express');
 const router = express.Router();
 const ExternalDCDistribution = require('../models/ExternalDCDistribution');
 const OutdoorCabinets = require('../models/OutdoorCabinets');
-
-// Validation helper for PDU data
-const validatePDUData = (pduData) => {
-  const validModels = ['Nokia FPFH', 'Nokia FPFD', 'DC panel', 'Other'];
-  const validLocations = ['On ground level', 'On tower'];
-  const validDistributionTypes = ['BI VD', 'LI VD', 'PDU', 'BLVD', 'LLVD', 'blvd', 'llvd', 'pdu'];
-  const validYesNo = ['Yes', 'No'];
-
-  if (pduData.dc_distribution_model && !validModels.includes(pduData.dc_distribution_model)) {
-    throw new Error(`Invalid DC distribution model: ${pduData.dc_distribution_model}`);
-  }
-  if (pduData.dc_distribution_location && !validLocations.includes(pduData.dc_distribution_location)) {
-    throw new Error(`Invalid DC distribution location: ${pduData.dc_distribution_location}`);
-  }
-  if (pduData.dc_feed_distribution_type && !validDistributionTypes.includes(pduData.dc_feed_distribution_type)) {
-    throw new Error(`Invalid DC feed distribution type: ${pduData.dc_feed_distribution_type}. Valid values: BLVD, LLVD, PDU, BI VD, LI VD`);
-  }
-  if (pduData.is_shared_panel && !validYesNo.includes(pduData.is_shared_panel)) {
-    throw new Error(`Invalid shared panel value: ${pduData.is_shared_panel}`);
-  }
-  if (pduData.has_free_cbs_fuses && !validYesNo.includes(pduData.has_free_cbs_fuses)) {
-    throw new Error(`Invalid free CBs/Fuses value: ${pduData.has_free_cbs_fuses}`);
-  }
-
-  // Validate cabinet reference format if provided
-  if (pduData.dc_feed_cabinet) {
-    const newCabinetRefPattern = /^\d+-[A-Z]{3,4}-\d+$/; // Format: "1-BLVD-0" or "2-LLVD-1" or "3-PDU-2"
-    const legacyCabinetRefPattern = /^Existing cabinet #\d+$/i; // Format: "Existing cabinet #1"
-    
-    if (!newCabinetRefPattern.test(pduData.dc_feed_cabinet) && !legacyCabinetRefPattern.test(pduData.dc_feed_cabinet)) {
-      throw new Error(`Invalid cabinet reference format: ${pduData.dc_feed_cabinet}. Expected format: "1-BLVD-0" or "Existing cabinet #1"`);
-    }
-  }
-
-  // Validate cabinet details object if provided
-  if (pduData.dc_feed_cabinet_details) {
-    const details = pduData.dc_feed_cabinet_details;
-    
-    if (typeof details !== 'object') {
-      throw new Error('Cabinet details must be an object');
-    }
-    
-    if (details.cabinet_number && (!Number.isInteger(details.cabinet_number) || details.cabinet_number < 1)) {
-      throw new Error('Cabinet number must be a positive integer');
-    }
-    
-    if (details.distribution_type && !['BLVD', 'LLVD', 'PDU'].includes(details.distribution_type)) {
-      throw new Error('Distribution type must be BLVD, LLVD, or PDU');
-    }
-    
-    if (details.distribution_index && (!Number.isInteger(details.distribution_index) || details.distribution_index < 0)) {
-      throw new Error('Distribution index must be a non-negative integer');
-    }
-  }
-};
-
-// Helper function to validate cabinet reference against actual cabinet data
-const validateCabinetReference = async (sessionId, cabinetRef, cabinetDetails) => {
-  if (!cabinetRef) {
-    return true; // Skip validation if no cabinet reference provided
-  }
-
-  // Check if it's legacy format "Existing cabinet #X"
-  const legacyCabinetRefPattern = /^Existing cabinet #\d+$/i;
-  if (legacyCabinetRefPattern.test(cabinetRef)) {
-    // For legacy format, skip detailed validation but check if cabinet exists
-    const cabinetMatch = cabinetRef.match(/Existing cabinet #(\d+)/i);
-    if (cabinetMatch) {
-      const cabinetNumber = parseInt(cabinetMatch[1]);
-      
-      const cabinet = await OutdoorCabinets.findOne({
-        where: { session_id: sessionId },
-        attributes: ['cabinets']
-      });
-
-      if (!cabinet || !cabinet.cabinets) {
-        throw new Error('No cabinet data found for this session');
-      }
-
-      const cabinetIndex = cabinetNumber - 1;
-      if (!cabinet.cabinets[cabinetIndex]) {
-        throw new Error(`Cabinet ${cabinetNumber} does not exist`);
-      }
-    }
-    return true; // Legacy format validation passed
-  }
-
-  // For new format, we need cabinet details
-  if (!cabinetDetails) {
-    throw new Error('Cabinet details are required for new cabinet reference format');
-  }
-
-  try {
-    const cabinet = await OutdoorCabinets.findOne({
-      where: { session_id: sessionId },
-      attributes: ['cabinets']
-    });
-
-    if (!cabinet || !cabinet.cabinets) {
-      throw new Error('No cabinet data found for this session');
-    }
-
-    const { cabinet_number, distribution_type, distribution_index } = cabinetDetails;
-    const cabinetIndex = cabinet_number - 1;
-
-    if (!cabinet.cabinets[cabinetIndex]) {
-      throw new Error(`Cabinet ${cabinet_number} does not exist`);
-    }
-
-    const cabinetData = cabinet.cabinets[cabinetIndex];
-    let distributionArray;
-
-    switch (distribution_type) {
-      case 'BLVD':
-        distributionArray = cabinetData.blvdCBsRatings;
-        break;
-      case 'LLVD':
-        distributionArray = cabinetData.llvdCBsRatings;
-        break;
-      case 'PDU':
-        distributionArray = cabinetData.pduCBsRatings;
-        break;
-      default:
-        throw new Error(`Invalid distribution type: ${distribution_type}`);
-    }
-
-    if (!distributionArray || !Array.isArray(distributionArray)) {
-      throw new Error(`No ${distribution_type} data found in cabinet ${cabinet_number}`);
-    }
-
-    if (!distributionArray[distribution_index]) {
-      throw new Error(`${distribution_type} index ${distribution_index} does not exist in cabinet ${cabinet_number}`);
-    }
-
-    return true;
-  } catch (error) {
-    throw new Error(`Cabinet reference validation failed: ${error.message}`);
-  }
-};
+const ExternalDCDistributionImageService = require('../services/ExternalDCDistributionImageService');
+const { uploadAnyWithErrorHandling } = require('../middleware/upload');
+const ExternalDCDistributionService = require('../services/ExternalDCDistributionService');
 
 // Helper function to get number of cabinets for a session
 const getCabinetCount = async (sessionId) => {
@@ -180,23 +44,11 @@ router.get('/:session_id', async (req, res) => {
     // Get cabinet count for this session
     const numberOfCabinets = await getCabinetCount(session_id);
     
-    // Try to find existing data
-    let dcDistribution = await ExternalDCDistribution.findOne({
-      where: { session_id }
-    });
+    // Get data with images
+    const data = await ExternalDCDistributionService.getBySessionId(session_id);
     
-    // If no data exists, return default empty structure
-    if (!dcDistribution) {
-      const defaultData = getDefaultEmptyData(session_id);
-      return res.json({
-        ...defaultData,
-        number_of_cabinets: numberOfCabinets
-      });
-    }
-    
-    // Return existing data with number of cabinets
     res.json({
-      ...dcDistribution.toJSON(),
+      ...data,
       number_of_cabinets: numberOfCabinets
     });
   } catch (error) {
@@ -209,35 +61,6 @@ router.post('/:session_id', async (req, res) => {
   try {
     const { session_id } = req.params;
     const { has_separate_dc_pdu, pdu_count, dc_pdus } = req.body;
-    
-    // Validate basic fields
-    if (has_separate_dc_pdu && !['Yes', 'No'].includes(has_separate_dc_pdu)) {
-      return res.status(400).json({ error: 'Invalid value for has_separate_dc_pdu' });
-    }
-    
-    if (pdu_count && (pdu_count < 0 || pdu_count > 10)) {
-      return res.status(400).json({ error: 'PDU count must be between 0 and 10' });
-    }
-    
-    // Validate PDU data if provided
-    if (dc_pdus && Array.isArray(dc_pdus)) {
-      for (let i = 0; i < dc_pdus.length; i++) {
-        try {
-          validatePDUData(dc_pdus[i]);
-          
-          // Validate cabinet reference if provided
-          if (dc_pdus[i].dc_feed_cabinet) {
-            await validateCabinetReference(
-              session_id, 
-              dc_pdus[i].dc_feed_cabinet, 
-              dc_pdus[i].dc_feed_cabinet_details
-            );
-          }
-        } catch (error) {
-          return res.status(400).json({ error: `PDU ${i + 1}: ${error.message}` });
-        }
-      }
-    }
     
     // Get cabinet count for response
     const numberOfCabinets = await getCabinetCount(session_id);
@@ -283,39 +106,10 @@ router.post('/:session_id', async (req, res) => {
 });
 
 // Update External DC Distribution data by session_id (PUT method - NO TOKEN REQUIRED)
-router.put('/:session_id', async (req, res) => {
+router.put('/:session_id', uploadAnyWithErrorHandling, async (req, res) => {
   try {
     const { session_id } = req.params;
-    const { has_separate_dc_pdu, pdu_count, dc_pdus } = req.body;
-    
-    // Validate basic fields
-    if (has_separate_dc_pdu && !['Yes', 'No'].includes(has_separate_dc_pdu)) {
-      return res.status(400).json({ error: 'Invalid value for has_separate_dc_pdu' });
-    }
-    
-    if (pdu_count && (pdu_count < 0 || pdu_count > 10)) {
-      return res.status(400).json({ error: 'PDU count must be between 0 and 10' });
-    }
-    
-    // Validate PDU data if provided
-    if (dc_pdus && Array.isArray(dc_pdus)) {
-      for (let i = 0; i < dc_pdus.length; i++) {
-        try {
-          validatePDUData(dc_pdus[i]);
-          
-          // Validate cabinet reference if provided
-          if (dc_pdus[i].dc_feed_cabinet) {
-            await validateCabinetReference(
-              session_id, 
-              dc_pdus[i].dc_feed_cabinet, 
-              dc_pdus[i].dc_feed_cabinet_details
-            );
-          }
-        } catch (error) {
-          return res.status(400).json({ error: `PDU ${i + 1}: ${error.message}` });
-        }
-      }
-    }
+    const updateData = req.body;
     
     // Get cabinet count for response
     const numberOfCabinets = await getCabinetCount(session_id);
@@ -328,83 +122,130 @@ router.put('/:session_id', async (req, res) => {
       // Create new record if it doesn't exist
       dcDistribution = await ExternalDCDistribution.create({
         session_id,
-        has_separate_dc_pdu: has_separate_dc_pdu || '',
-        pdu_count: pdu_count || 0,
-        dc_pdus: dc_pdus || []
+        has_separate_dc_pdu: updateData.has_separate_dc_pdu || '',
+        pdu_count: updateData.pdu_count || 0,
+        dc_pdus: updateData.dc_pdus || []
       });
     } else {
       // Update existing record
       await dcDistribution.update({ 
-        has_separate_dc_pdu: has_separate_dc_pdu || '',
-        pdu_count: pdu_count || 0,
-        dc_pdus: dc_pdus || []
+        has_separate_dc_pdu: updateData.has_separate_dc_pdu || '',
+        pdu_count: updateData.pdu_count || 0,
+        dc_pdus: updateData.dc_pdus || []
       });
     }
-    
-    res.json({
+
+    // Handle image uploads
+    const imageResults = [];
+    let hasImageUploadFailures = false;
+
+    if (req.files && req.files.length > 0) {
+      for (const file of req.files) {
+        const field = file.fieldname; // e.g. "pdu_1_photo"
+        const parts = field.split('_');
+        const pduIndex = parseInt(parts[1], 10) - 1; // Convert to 0-based index
+
+        try {
+          const result = await ExternalDCDistributionImageService.handlePDUImageUpload(
+            file,
+            session_id,
+            pduIndex,
+            field
+          );
+          imageResults.push({ field, success: true, data: result.data });
+        } catch (err) {
+          hasImageUploadFailures = true;
+          imageResults.push({ field, success: false, error: err.message });
+        }
+      }
+    }
+
+    // Get final data with updated images
+    const finalData = await ExternalDCDistributionService.getBySessionId(session_id);
+
+    const response = {
+      success: true,
       message: 'External DC Distribution data updated successfully',
       data: {
-        ...dcDistribution.toJSON(),
+        ...finalData,
         number_of_cabinets: numberOfCabinets
       }
-    });
+    };
+
+    // Add image processing results if any images were uploaded
+    if (imageResults.length > 0) {
+      const successCount = imageResults.filter(r => r.success).length;
+      const failCount = imageResults.filter(r => !r.success).length;
+
+      response.images_processed = {
+        total: imageResults.length,
+        successful: successCount,
+        failed: failCount,
+        details: imageResults
+      };
+
+      if (successCount > 0) {
+        response.message += ` and ${successCount} image(s) uploaded/replaced`;
+      }
+      if (failCount > 0) {
+        response.message += ` (${failCount} failed)`;
+      }
+    }
+
+    res.json(response);
   } catch (error) {
     res.status(400).json({ error: error.message });
   }
 });
 
 // Update specific PDU by index (NO TOKEN REQUIRED)
-router.put('/:session_id/pdu/:pdu_index', async (req, res) => {
+router.put('/:session_id/pdu/:pdu_index', uploadAnyWithErrorHandling, async (req, res) => {
   try {
     const { session_id, pdu_index } = req.params;
     const pduData = req.body;
     const index = parseInt(pdu_index);
     
-    // Validate PDU data
-    try {
-      validatePDUData(pduData);
-    } catch (error) {
-      return res.status(400).json({ error: error.message });
-    }
-    
     // Get cabinet count for response
     const numberOfCabinets = await getCabinetCount(session_id);
     
-    let dcDistribution = await ExternalDCDistribution.findOne({
-      where: { session_id }
-    });
+    // Update PDU data first
+    const updatedData = await ExternalDCDistributionService.updatePDU(session_id, index, pduData);
     
-    if (!dcDistribution) {
-      // Create new record with empty structure
-      dcDistribution = await ExternalDCDistribution.create({
-        session_id,
-        has_separate_dc_pdu: '',
-        pdu_count: Math.max(index + 1, 1),
-        dc_pdus: []
-      });
+    // Handle image uploads
+    const imageResults = [];
+    if (req.files && req.files.length > 0) {
+      for (const file of req.files) {
+        const category = file.fieldname; // e.g. "pdu_1_photo"
+        try {
+          const result = await ExternalDCDistributionImageService.handlePDUImageUpload(
+            file,
+            session_id,
+            index,
+            category
+          );
+          imageResults.push({ category, success: true, data: result.data });
+        } catch (err) {
+          imageResults.push({ category, success: false, error: err.message });
+        }
+      }
     }
-    
-    let dc_pdus = dcDistribution.dc_pdus || [];
-    
-    // Ensure the array is large enough
-    while (dc_pdus.length <= index) {
-      dc_pdus.push({});
-    }
-    
-    // Update the specific PDU
-    dc_pdus[index] = { ...dc_pdus[index], ...pduData };
-    
-    await dcDistribution.update({ 
-      dc_pdus,
-      pdu_count: Math.max(dcDistribution.pdu_count, dc_pdus.length)
-    });
-    
+
+    // Get final data with updated images
+    const finalData = await ExternalDCDistributionService.getBySessionId(session_id);
+
     res.json({
+      success: true,
       message: `PDU ${index + 1} updated successfully`,
       data: {
-        ...dcDistribution.toJSON(),
+        ...finalData,
         number_of_cabinets: numberOfCabinets
-      }
+      },
+      images_processed: imageResults.length > 0 ? {
+        total: imageResults.length,
+        successful: imageResults.filter(r => r.success).length,
+        failed: imageResults.filter(r => !r.success).length,
+        details: imageResults
+      } : undefined
     });
   } catch (error) {
     res.status(400).json({ error: error.message });
@@ -416,35 +257,6 @@ router.put('/:session_id', async (req, res) => {
   try {
     const { session_id } = req.params;
     const updateData = req.body;
-    
-    // Validate basic fields if provided
-    if (updateData.has_separate_dc_pdu && !['Yes', 'No'].includes(updateData.has_separate_dc_pdu)) {
-      return res.status(400).json({ error: 'Invalid value for has_separate_dc_pdu' });
-    }
-    
-    if (updateData.pdu_count && (updateData.pdu_count < 0 || updateData.pdu_count > 10)) {
-      return res.status(400).json({ error: 'PDU count must be between 0 and 10' });
-    }
-    
-    // Validate PDU data if provided
-    if (updateData.dc_pdus && Array.isArray(updateData.dc_pdus)) {
-      for (let i = 0; i < updateData.dc_pdus.length; i++) {
-        try {
-          validatePDUData(updateData.dc_pdus[i]);
-          
-          // Validate cabinet reference if provided
-          if (updateData.dc_pdus[i].dc_feed_cabinet) {
-            await validateCabinetReference(
-              session_id, 
-              updateData.dc_pdus[i].dc_feed_cabinet, 
-              updateData.dc_pdus[i].dc_feed_cabinet_details
-            );
-          }
-        } catch (error) {
-          return res.status(400).json({ error: `PDU ${i + 1}: ${error.message}` });
-        }
-      }
-    }
     
     // Get cabinet count for response
     const numberOfCabinets = await getCabinetCount(session_id);
@@ -504,10 +316,14 @@ router.delete('/:session_id', async (req, res) => {
       });
     }
     
+    // Delete all images for this session first
+    await ExternalDCDistributionImageService.deleteAllSessionImages(session_id);
+    
+    // Then delete the record
     await dcDistribution.destroy();
     
     res.json({
-      message: 'External DC Distribution data deleted successfully'
+      message: 'External DC Distribution data and all associated images deleted successfully'
     });
   } catch (error) {
     res.status(500).json({ error: error.message });
@@ -612,10 +428,6 @@ router.get('/cabinet-details/:session_id/:cabinet_number', async (req, res) => {
     const { session_id, cabinet_number } = req.params;
     const cabinetIndex = parseInt(cabinet_number) - 1;
 
-    if (isNaN(cabinetIndex) || cabinetIndex < 0) {
-      return res.status(400).json({ error: 'Invalid cabinet number' });
-    }
-
     const cabinet = await OutdoorCabinets.findOne({
       where: { session_id },
       attributes: ['cabinets']
@@ -665,19 +477,10 @@ router.get('/cabinet-details/:session_id/:cabinet_number', async (req, res) => {
 });
 
 // GET /api/external-dc-distribution/cabinet-data/:session_id/:cabinet_number/:distribution_type
-// Returns only the raw cabinet distribution data (rating and connected_load)
 router.get('/cabinet-data/:session_id/:cabinet_number/:distribution_type', async (req, res) => {
   try {
     const { session_id, cabinet_number, distribution_type } = req.params;
     const cabinetIndex = parseInt(cabinet_number) - 1;
-
-    if (isNaN(cabinetIndex) || cabinetIndex < 0) {
-      return res.status(400).json({ error: 'Invalid cabinet number' });
-    }
-
-    if (!['BLVD', 'LLVD', 'PDU'].includes(distribution_type.toUpperCase())) {
-      return res.status(400).json({ error: 'Invalid distribution type. Must be BLVD, LLVD, or PDU' });
-    }
 
     const cabinet = await OutdoorCabinets.findOne({
       where: { session_id },
@@ -731,12 +534,6 @@ router.get('/dc-cb-options/:session_id/:cabinet_ref', async (req, res) => {
     
     // Parse cabinet reference (format: "1-BLVD-0")
     const [cabinetNumber, distributionType, distributionIndex] = cabinet_ref.split('-');
-    
-    if (!cabinetNumber || !distributionType || distributionIndex === undefined) {
-      return res.status(400).json({ 
-        error: 'Invalid cabinet reference format. Expected: "1-BLVD-0"' 
-      });
-    }
 
     const cabinet = await OutdoorCabinets.findOne({
       where: { session_id },
@@ -775,31 +572,20 @@ router.get('/dc-cb-options/:session_id/:cabinet_ref', async (req, res) => {
         targetDistributionArray = cabinetData.pduCBsRatings || [];
         break;
       default:
-        return res.status(400).json({ 
-          error: `Invalid distribution type: ${distributionType}` 
-        });
-    }
-
-    if (!targetDistributionArray[distIndex]) {
-      return res.status(404).json({ 
-        error: `${distributionType} index ${distIndex} not found in cabinet ${cabinetNumber}` 
-      });
+        targetDistributionArray = [];
     }
 
     // Generate DC CB/Fuse options for this specific distribution
-    const selectedDistribution = targetDistributionArray[distIndex];
+    const selectedDistribution = targetDistributionArray[distIndex] || {};
     const dcCbOptions = [];
 
     // Create CB/Fuse options based on the rating and connected load
     if (selectedDistribution.rating && selectedDistribution.connected_load) {
       const rating = selectedDistribution.rating;
       const connectedLoad = selectedDistribution.connected_load;
-      
-      // Generate typical CB/Fuse options based on rating
       const ratingValue = parseFloat(rating);
       
       if (!isNaN(ratingValue)) {
-        // Generate options: 50%, 75%, 100%, 125% of the rating
         const percentages = [0.5, 0.75, 1.0, 1.25];
         
         percentages.forEach((percentage, index) => {
@@ -813,7 +599,7 @@ router.get('/dc-cb-options/:session_id/:cabinet_ref', async (req, res) => {
             percentage: `${percentage * 100}%`,
             display_text: `${cbType} ${cbRating}A (${percentage * 100}% of ${rating})`,
             value: `${cbType}_${cbRating}A`,
-            recommended: percentage === 1.0, // 100% is typically recommended
+            recommended: percentage === 1.0,
             cabinet_info: {
               cabinet_number: parseInt(cabinetNumber),
               distribution_type: distributionType,
@@ -824,7 +610,6 @@ router.get('/dc-cb-options/:session_id/:cabinet_ref', async (req, res) => {
           });
         });
 
-        // Add custom/other option
         dcCbOptions.push({
           id: 'custom',
           rating: 'Custom',
@@ -866,7 +651,7 @@ router.get('/dc-cb-options/:session_id/:cabinet_ref', async (req, res) => {
           percentage: 'Standard',
           display_text: `${option.type} ${option.rating}`,
           value: `${option.type}_${option.rating}`,
-          recommended: option.rating === '32A', // Common default
+          recommended: option.rating === '32A',
           cabinet_info: {
             cabinet_number: parseInt(cabinetNumber),
             distribution_type: distributionType,
@@ -889,7 +674,6 @@ router.get('/dc-cb-options/:session_id/:cabinet_ref', async (req, res) => {
         rating: selectedDistribution.rating || ''
       },
       dc_cb_options: dcCbOptions.sort((a, b) => {
-        // Sort by rating value (numeric)
         const aVal = parseFloat(a.rating) || 0;
         const bVal = parseFloat(b.rating) || 0;
         return aVal - bVal;
@@ -902,128 +686,7 @@ router.get('/dc-cb-options/:session_id/:cabinet_ref', async (req, res) => {
   }
 });
 
-// GET /api/external-dc-distribution/all-dc-cb-options/:session_id (for caching/preload)
-router.get('/all-dc-cb-options/:session_id', async (req, res) => {
-  try {
-    const { session_id } = req.params;
-
-    const cabinet = await OutdoorCabinets.findOne({
-      where: { session_id },
-      attributes: ['cabinets']
-    });
-
-    if (!cabinet || !cabinet.cabinets) {
-      return res.json({
-        session_id,
-        all_dc_cb_options: {}
-      });
-    }
-
-    const allDcCbOptions = {};
-
-    // Process each cabinet and build DC CB options for all distributions
-    cabinet.cabinets.forEach((cabinetData, cabinetIndex) => {
-      const cabinetNumber = cabinetIndex + 1;
-
-      // Process BLVD
-      if (cabinetData.blvdCBsRatings && Array.isArray(cabinetData.blvdCBsRatings)) {
-        cabinetData.blvdCBsRatings.forEach((blvd, blvdIndex) => {
-          const cabinetRef = `${cabinetNumber}-BLVD-${blvdIndex}`;
-          allDcCbOptions[cabinetRef] = generateDcCbOptionsForDistribution(
-            blvd, cabinetNumber, 'BLVD', blvdIndex
-          );
-        });
-      }
-
-      // Process LLVD
-      if (cabinetData.llvdCBsRatings && Array.isArray(cabinetData.llvdCBsRatings)) {
-        cabinetData.llvdCBsRatings.forEach((llvd, llvdIndex) => {
-          const cabinetRef = `${cabinetNumber}-LLVD-${llvdIndex}`;
-          allDcCbOptions[cabinetRef] = generateDcCbOptionsForDistribution(
-            llvd, cabinetNumber, 'LLVD', llvdIndex
-          );
-        });
-      }
-
-      // Process PDU
-      if (cabinetData.pduCBsRatings && Array.isArray(cabinetData.pduCBsRatings)) {
-        cabinetData.pduCBsRatings.forEach((pdu, pduIndex) => {
-          const cabinetRef = `${cabinetNumber}-PDU-${pduIndex}`;
-          allDcCbOptions[cabinetRef] = generateDcCbOptionsForDistribution(
-            pdu, cabinetNumber, 'PDU', pduIndex
-          );
-        });
-      }
-    });
-
-    res.json({
-      session_id,
-      all_dc_cb_options: allDcCbOptions,
-      cache_info: {
-        generated_at: new Date().toISOString(),
-        total_options: Object.keys(allDcCbOptions).length,
-        expires_in: '1 hour' // Suggest cache duration
-      }
-    });
-
-  } catch (error) {
-    console.error('Error fetching all DC CB options:', error);
-    res.status(500).json({ error: 'Internal server error', details: error.message });
-  }
-});
-
-// Helper function to generate DC CB options for a distribution
-const generateDcCbOptionsForDistribution = (distribution, cabinetNumber, distributionType, distributionIndex) => {
-  const dcCbOptions = [];
-  
-  if (distribution.rating && distribution.connected_load) {
-    const rating = distribution.rating;
-    const connectedLoad = distribution.connected_load;
-    const ratingValue = parseFloat(rating);
-    
-    if (!isNaN(ratingValue)) {
-      const percentages = [0.5, 0.75, 1.0, 1.25];
-      
-      percentages.forEach((percentage, index) => {
-        const cbRating = Math.round(ratingValue * percentage);
-        const cbType = cbRating <= 32 ? 'Fuse' : 'CB';
-        
-        dcCbOptions.push({
-          id: `cb_${index + 1}`,
-          rating: `${cbRating}A`,
-          type: cbType,
-          percentage: `${percentage * 100}%`,
-          display_text: `${cbType} ${cbRating}A (${percentage * 100}% of ${rating})`,
-          value: `${cbType}_${cbRating}A`,
-          recommended: percentage === 1.0
-        });
-      });
-
-      dcCbOptions.push({
-        id: 'custom',
-        rating: 'Custom',
-        type: 'Custom',
-        percentage: 'Custom',
-        display_text: 'Other/Custom CB or Fuse',
-        value: 'custom',
-        recommended: false
-      });
-    }
-  }
-
-  return {
-    cabinet_info: {
-      cabinet_number: cabinetNumber,
-      distribution_type: distributionType,
-      distribution_index: distributionIndex,
-      connected_load: distribution.connected_load || '',
-      rating: distribution.rating || ''
-    },
-    options: dcCbOptions
-  };
-};
-
-// Get all External DC Distribution data (for admin purposes) - MOVED TO END
+// Get all External DC Distribution data (for admin purposes)
 router.get('/', async (req, res) => {
   try {
     const dcDistributions = await ExternalDCDistribution.findAll({
@@ -1031,6 +694,100 @@ router.get('/', async (req, res) => {
     });
     
     res.json(dcDistributions);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Add new image upload route
+router.put('/:session_id/images/upload', uploadAnyWithErrorHandling, async (req, res) => {
+  try {
+    const { session_id } = req.params;
+    const imageResults = [];
+    let hasImageUploadFailures = false;
+
+    if (req.files && req.files.length > 0) {
+      for (const file of req.files) {
+        const field = file.fieldname; // e.g. "pdu_1_photo"
+        const parts = field.split('_');
+        const pduIndex = parseInt(parts[1], 10) - 1; // Convert to 0-based index
+
+        try {
+          const result = await ExternalDCDistributionImageService.handlePDUImageUpload(
+            file,
+            session_id,
+            pduIndex,
+            field
+          );
+          imageResults.push({ field, success: true, data: result.data });
+        } catch (err) {
+          hasImageUploadFailures = true;
+          imageResults.push({ field, success: false, error: err.message });
+        }
+      }
+    }
+
+    // Get final data with updated images
+    const finalData = await ExternalDCDistributionService.getBySessionId(session_id);
+    const numberOfCabinets = await getCabinetCount(session_id);
+
+    const successCount = imageResults.filter(r => r.success).length;
+    const failCount = imageResults.filter(r => !r.success).length;
+
+    // If we have any image upload failures, return success: false
+    if (hasImageUploadFailures) {
+      return res.status(400).json({
+        success: false,
+        data: {
+          ...finalData,
+          number_of_cabinets: numberOfCabinets
+        },
+        message: `${failCount} image upload(s) failed`,
+        images_processed: {
+          total: imageResults.length,
+          successful: successCount,
+          failed: failCount,
+          details: imageResults
+        }
+      });
+    }
+
+    res.json({
+      success: true,
+      data: {
+        ...finalData,
+        number_of_cabinets: numberOfCabinets
+      },
+      message: `${successCount} image(s) uploaded successfully`,
+      images_processed: {
+        total: imageResults.length,
+        successful: successCount,
+        failed: failCount,
+        details: imageResults
+      }
+    });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Delete specific PDU
+router.delete('/:session_id/pdu/:pdu_index', async (req, res) => {
+  try {
+    const { session_id, pdu_index } = req.params;
+    const index = parseInt(pdu_index);
+
+    // Delete all images for this PDU first
+    await ExternalDCDistributionImageService.deleteAllPDUImages(session_id, index);
+
+    // Then delete the PDU data
+    const result = await ExternalDCDistributionService.deletePDU(session_id, index);
+
+    res.json({
+      success: true,
+      message: `PDU ${index + 1} and all associated images deleted successfully`,
+      data: result
+    });
   } catch (error) {
     res.status(500).json({ error: error.message });
   }

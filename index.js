@@ -23,6 +23,7 @@ app.use(express.json());
 // Serve static files for uploaded images
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 app.use('/uploads/mw_antennas', express.static(path.join(__dirname, 'uploads/mw_antennas')));
+app.use('/uploads/site_images', express.static(path.join(__dirname, 'uploads/site_images')));
 
 // Routes
 const siteLocationRoutes = require('./routes/siteLocationRoutes');
@@ -50,6 +51,7 @@ const newAntennasRoutes = require('./routes/newAntennasRoutes');
 const newRadioUnitsRoutes = require('./routes/newRadioUnitsRoutes');
 const newFPFHsRoutes = require('./routes/newFPFHsRoutes');
 const newGPSRoutes = require('./routes/newGPSRoutes');
+const siteImagesRoutes = require('./routes/siteImagesRoutes');
 // Health & Safety routes
 const healthSafetySiteAccessRoutes = require('./routes/healthSafetySiteAccessRoutes');
 const healthSafetyBTSAccessRoutes = require('./routes/healthSafetyBTSAccessRoutes');
@@ -137,6 +139,7 @@ app.use('/api/new-antennas', newAntennasRoutes);
 app.use('/api/new-radio-units', newRadioUnitsRoutes);
 app.use('/api/new-fpfh', newFPFHsRoutes);
 app.use('/api/new-gps', newGPSRoutes);
+app.use('/api/site-images', siteImagesRoutes);
 // Health & Safety route registrations
 app.use('/api/health-safety-site-access', healthSafetySiteAccessRoutes);
 app.use('/api/health-safety-bts-access', healthSafetyBTSAccessRoutes);

@@ -13,17 +13,13 @@ const ExternalDCDistribution = sequelize.define('ExternalDCDistribution', {
   },
   // Is there separate DC PDU feeding the radio units, baseband & other equipment?
   has_separate_dc_pdu: {
-    type: DataTypes.ENUM('Yes', 'No'),
+    type: DataTypes.STRING(10),
     allowNull: true
   },
   // How many?
   pdu_count: {
     type: DataTypes.INTEGER,
-    allowNull: true,
-    validate: {
-      min: 1,
-      max: 10
-    }
+    allowNull: true
   },
   // Array of DC PDU data - each PDU has its own set of properties
   dc_pdus: {
