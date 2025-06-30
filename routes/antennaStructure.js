@@ -11,21 +11,21 @@ const { uploadSingle, uploadMultiple, imageCategories } = require('../middleware
 router.get('/:sessionId', async (req, res) => {
   try {
     const { sessionId } = req.params;
-    
+
     const result = await AntennaStructureService.getOrCreateBySessionId(sessionId);
-    
+
     res.status(200).json({
       success: true,
       data: result,
       message: 'Antenna Structure data retrieved successfully'
     });
-    
+
   } catch (error) {
     console.error('Error getting antenna structure data:', error);
-    
-    const statusCode = error.type === 'VALIDATION_ERROR' ? 400 : 
-                      error.type === 'FOREIGN_KEY_ERROR' ? 404 : 500;
-    
+
+    const statusCode = error.type === 'VALIDATION_ERROR' ? 400 :
+      error.type === 'FOREIGN_KEY_ERROR' ? 404 : 500;
+
     res.status(statusCode).json({
       success: false,
       error: {
@@ -44,7 +44,7 @@ router.put('/:sessionId', uploadMultiple, async (req, res) => {
   try {
     const { sessionId } = req.params;
     let updateData = {};
-    
+
     // Handle both JSON and form-data
     if (req.body) {
       // If form-data, parse JSON fields (exclude image category names)
@@ -66,7 +66,7 @@ router.put('/:sessionId', uploadMultiple, async (req, res) => {
         updateData = req.body;
       }
     }
-    
+
     // Update antenna structure data if provided
     let result = null;
     if (Object.keys(updateData).length > 0) {
@@ -74,12 +74,12 @@ router.put('/:sessionId', uploadMultiple, async (req, res) => {
     } else {
       result = await AntennaStructureService.getOrCreateBySessionId(sessionId);
     }
-    
+
     // Handle image uploads/replacements if files are provided
     let imageResults = [];
     if (req.imagesByCategory && Object.keys(req.imagesByCategory).length > 0) {
       const { description } = req.body;
-      
+
       // Process each category - replace existing image
       for (const [category, file] of Object.entries(req.imagesByCategory)) {
         try {
@@ -103,29 +103,29 @@ router.put('/:sessionId', uploadMultiple, async (req, res) => {
           });
         }
       }
-      
+
       // Get updated data with new images
       result = await AntennaStructureService.getOrCreateBySessionId(sessionId);
     }
-    
+
     const response = {
       success: true,
       data: result,
       message: 'Antenna Structure data updated successfully'
     };
-    
+
     // Add image upload info if images were uploaded
     if (imageResults.length > 0) {
       const successCount = imageResults.filter(r => r.success).length;
       const failCount = imageResults.filter(r => !r.success).length;
-      
+
       response.images_processed = {
         total: imageResults.length,
         successful: successCount,
         failed: failCount,
         details: imageResults
       };
-      
+
       if (successCount > 0) {
         response.message += ` and ${successCount} image(s) uploaded/replaced`;
       }
@@ -133,16 +133,16 @@ router.put('/:sessionId', uploadMultiple, async (req, res) => {
         response.message += ` (${failCount} failed)`;
       }
     }
-    
+
     res.status(200).json(response);
-    
+
   } catch (error) {
     console.error('Error updating antenna structure data:', error);
-    
-    const statusCode = error.type === 'VALIDATION_ERROR' ? 400 : 
-                      error.type === 'FOREIGN_KEY_ERROR' ? 404 : 
-                      error.type === 'DUPLICATE_ERROR' ? 409 : 500;
-    
+
+    const statusCode = error.type === 'VALIDATION_ERROR' ? 400 :
+      error.type === 'FOREIGN_KEY_ERROR' ? 404 :
+        error.type === 'DUPLICATE_ERROR' ? 409 : 500;
+
     res.status(statusCode).json({
       success: false,
       error: {
@@ -160,9 +160,9 @@ router.put('/:sessionId', uploadMultiple, async (req, res) => {
 router.delete('/:sessionId', async (req, res) => {
   try {
     const { sessionId } = req.params;
-    
+
     const result = await AntennaStructureService.deleteBySessionId(sessionId);
-    
+
     if (result.deleted) {
       res.status(200).json({
         success: true,
@@ -178,12 +178,12 @@ router.delete('/:sessionId', async (req, res) => {
         }
       });
     }
-    
+
   } catch (error) {
     console.error('Error deleting antenna structure data:', error);
-    
+
     const statusCode = error.type === 'VALIDATION_ERROR' ? 400 : 500;
-    
+
     res.status(statusCode).json({
       success: false,
       error: {
@@ -201,9 +201,9 @@ router.delete('/:sessionId', async (req, res) => {
 router.get('/:sessionId/cabinet-options', async (req, res) => {
   try {
     const { sessionId } = req.params;
-    
+
     const options = await AntennaStructureService.getCabinetOptions(sessionId);
-    
+
     res.status(200).json({
       success: true,
       data: {
@@ -212,10 +212,10 @@ router.get('/:sessionId/cabinet-options', async (req, res) => {
       },
       message: 'Cabinet options retrieved successfully'
     });
-    
+
   } catch (error) {
     console.error('Error getting cabinet options:', error);
-    
+
     res.status(500).json({
       success: false,
       error: {
@@ -236,7 +236,7 @@ router.post('/:sessionId/images/upload', uploadSingle, async (req, res) => {
   try {
     const { sessionId } = req.params;
     const { image_category, description } = req.body;
-    
+
     if (!req.file) {
       return res.status(400).json({
         success: false,
@@ -246,7 +246,7 @@ router.post('/:sessionId/images/upload', uploadSingle, async (req, res) => {
         }
       });
     }
-    
+
     if (!image_category) {
       return res.status(400).json({
         success: false,
@@ -256,7 +256,7 @@ router.post('/:sessionId/images/upload', uploadSingle, async (req, res) => {
         }
       });
     }
-    
+
     // Validate image category
     if (!imageCategories.includes(image_category)) {
       return res.status(400).json({
@@ -267,7 +267,7 @@ router.post('/:sessionId/images/upload', uploadSingle, async (req, res) => {
         }
       });
     }
-    
+
     // Replace existing image or create new
     const replaceResult = await AntennaStructureImageService.replaceImage({
       file: req.file,
@@ -275,16 +275,16 @@ router.post('/:sessionId/images/upload', uploadSingle, async (req, res) => {
       image_category,
       description: description || null
     });
-    
+
     res.status(201).json({
       success: true,
       data: replaceResult.data,
       message: 'Image uploaded and replaced successfully'
     });
-    
+
   } catch (error) {
     console.error('Error uploading antenna structure image:', error);
-    
+
     res.status(500).json({
       success: false,
       error: {
@@ -303,7 +303,7 @@ router.get('/:sessionId/images', async (req, res) => {
   try {
     const { sessionId } = req.params;
     const { category } = req.query;
-    
+
     let images;
     if (category) {
       // Get images for specific category
@@ -313,7 +313,7 @@ router.get('/:sessionId/images', async (req, res) => {
       // Get all images
       images = await AntennaStructureImageService.getImagesBySessionId(sessionId);
     }
-    
+
     res.status(200).json({
       success: true,
       data: {
@@ -324,10 +324,10 @@ router.get('/:sessionId/images', async (req, res) => {
       },
       message: 'Images retrieved successfully'
     });
-    
+
   } catch (error) {
     console.error('Error getting antenna structure images:', error);
-    
+
     res.status(500).json({
       success: false,
       error: {
@@ -345,9 +345,9 @@ router.get('/:sessionId/images', async (req, res) => {
 router.get('/:sessionId/images/grouped', async (req, res) => {
   try {
     const { sessionId } = req.params;
-    
+
     const imagesGrouped = await AntennaStructureImageService.getImagesGroupedByCategory(sessionId);
-    
+
     res.status(200).json({
       success: true,
       data: {
@@ -358,10 +358,10 @@ router.get('/:sessionId/images/grouped', async (req, res) => {
       },
       message: 'Images grouped by category retrieved successfully'
     });
-    
+
   } catch (error) {
     console.error('Error getting grouped antenna structure images:', error);
-    
+
     res.status(500).json({
       success: false,
       error: {
@@ -379,20 +379,20 @@ router.get('/:sessionId/images/grouped', async (req, res) => {
 router.delete('/images/:imageId', async (req, res) => {
   try {
     const { imageId } = req.params;
-    
+
     const result = await AntennaStructureImageService.deleteImage(imageId);
-    
+
     res.status(200).json({
       success: true,
       data: result,
       message: 'Image deleted successfully'
     });
-    
+
   } catch (error) {
     console.error('Error deleting antenna structure image:', error);
-    
+
     const statusCode = error.message === 'Image not found' ? 404 : 500;
-    
+
     res.status(statusCode).json({
       success: false,
       error: {
@@ -411,20 +411,20 @@ router.put('/images/:imageId', async (req, res) => {
   try {
     const { imageId } = req.params;
     const updateData = req.body;
-    
+
     const result = await AntennaStructureImageService.updateImageMetadata(imageId, updateData);
-    
+
     res.status(200).json({
       success: true,
       data: result.data,
       message: 'Image metadata updated successfully'
     });
-    
+
   } catch (error) {
     console.error('Error updating antenna structure image metadata:', error);
-    
+
     const statusCode = error.message === 'Image not found' ? 404 : 500;
-    
+
     res.status(statusCode).json({
       success: false,
       error: {
@@ -449,10 +449,10 @@ router.get('/images/categories', async (req, res) => {
       },
       message: 'Available image categories retrieved successfully'
     });
-    
+
   } catch (error) {
     console.error('Error getting image categories:', error);
-    
+
     res.status(500).json({
       success: false,
       error: {

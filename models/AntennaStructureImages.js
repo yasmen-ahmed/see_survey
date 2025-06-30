@@ -16,19 +16,7 @@ const AntennaStructureImages = sequelize.define('AntennaStructureImages', {
   },
   
   image_category: {
-    type: DataTypes.ENUM(
-      'structure_general_photo',
-      'structure_legs_photo_1',
-      'structure_legs_photo_2', 
-      'structure_legs_photo_3',
-      'structure_legs_photo_4',
-      'building_photo',
-      'north_direction_view',
-      'cables_route_photo_from_tower_top_1',
-      'cables_route_photo_from_tower_top_2',
-      'general_structure_photo',
-      'custom_photo'
-    ),
+    type: DataTypes.STRING,
     allowNull: false,
     comment: 'Category/type of the antenna structure image'
   },

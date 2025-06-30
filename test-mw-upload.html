@@ -1,0 +1,153 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Test MW Antennas Upload</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; }
+        .antenna-group { border: 1px solid #ccc; padding: 15px; margin: 10px 0; border-radius: 5px; }
+        .form-group { margin: 10px 0; }
+        label { display: inline-block; width: 150px; font-weight: bold; }
+        input[type="number"], input[type="file"], input[type="text"] { width: 200px; padding: 5px; }
+        button { background: #007bff; color: white; padding: 10px 20px; border: none; border-radius: 5px; cursor: pointer; }
+        button:hover { background: #0056b3; }
+        .result { margin-top: 20px; padding: 10px; border-radius: 5px; }
+        .success { background: #d4edda; border: 1px solid #c3e6cb; }
+        .error { background: #f8d7da; border: 1px solid #f5c6cb; }
+    </style>
+</head>
+<body>
+    <h1>Test MW Antennas Upload</h1>
+    
+    <form id="mwForm" enctype="multipart/form-data">
+        <div class="form-group">
+            <label>Session ID:</label>
+            <input type="text" id="sessionId" value="2025-06-10T13:19:14.277Zsite1">
+        </div>
+        
+        <div class="form-group">
+            <label>Number of Antennas:</label>
+            <select id="numAntennas" onchange="updateAntennaInputs()">
+                <option value="1">1</option>
+                <option value="2" selected>2</option>
+                <option value="3">3</option>
+            </select>
+        </div>
+
+        <div id="antennasContainer">
+            <!-- Antenna inputs will be generated here -->
+        </div>
+
+        <button type="button" onclick="submitForm()">Upload MW Antennas Data</button>
+    </form>
+
+    <div id="result"></div>
+
+    <script>
+        function updateAntennaInputs() {
+            const numAntennas = parseInt(document.getElementById('numAntennas').value);
+            const container = document.getElementById('antennasContainer');
+            container.innerHTML = '';
+
+            for (let i = 1; i <= numAntennas; i++) {
+                const antennaDiv = document.createElement('div');
+                antennaDiv.className = 'antenna-group';
+                antennaDiv.innerHTML = `
+                    <h3>Antenna ${i}</h3>
+                    <div class="form-group">
+                        <label>Height (m):</label>
+                        <input type="number" name="antenna_${i}_height" value="${i * 10}" step="0.1">
+                    </div>
+                    <div class="form-group">
+                        <label>Diameter (m):</label>
+                        <input type="number" name="antenna_${i}_diameter" value="${i * 20}" step="0.1">
+                    </div>
+                    <div class="form-group">
+                        <label>Azimuth (°):</label>
+                        <input type="number" name="antenna_${i}_azimuth" value="${i * 30}" step="1">
+                    </div>
+                    <div class="form-group">
+                        <label>Main Photo:</label>
+                        <input type="file" name="antenna_${i}_photo" accept="image/*">
+                    </div>
+                    <div class="form-group">
+                        <label>Photo Description:</label>
+                        <input type="text" name="antenna_${i}_photo_description" placeholder="Optional description">
+                    </div>
+                    <div class="form-group">
+                        <label>Azimuth View:</label>
+                        <input type="file" name="antenna_${i}_azimuth_view_photo" accept="image/*">
+                    </div>
+                `;
+                container.appendChild(antennaDiv);
+            }
+        }
+
+        async function submitForm() {
+            const sessionId = document.getElementById('sessionId').value;
+            const numAntennas = parseInt(document.getElementById('numAntennas').value);
+            const formData = new FormData();
+
+            // Add antenna data
+            const mwAntennasData = {
+                mw_antennas: []
+            };
+
+            for (let i = 1; i <= numAntennas; i++) {
+                const height = parseFloat(document.querySelector(`input[name="antenna_${i}_height"]`).value) || 0;
+                const diameter = parseFloat(document.querySelector(`input[name="antenna_${i}_diameter"]`).value) || 0;
+                const azimuth = parseFloat(document.querySelector(`input[name="antenna_${i}_azimuth"]`).value) || 0;
+
+                mwAntennasData.mw_antennas.push({
+                    height: height,
+                    diameter: diameter,
+                    azimuth: azimuth
+                });
+
+                // Add files
+                const photoFile = document.querySelector(`input[name="antenna_${i}_photo"]`).files[0];
+                if (photoFile) {
+                    formData.append(`antenna_${i}_photo`, photoFile);
+                }
+
+                const azimuthFile = document.querySelector(`input[name="antenna_${i}_azimuth_view_photo"]`).files[0];
+                if (azimuthFile) {
+                    formData.append(`antenna_${i}_azimuth_view_photo`, azimuthFile);
+                }
+
+                // Add descriptions
+                const description = document.querySelector(`input[name="antenna_${i}_photo_description"]`).value;
+                if (description) {
+                    formData.append(`antenna_${i}_photo_description`, description);
+                }
+            }
+
+            // Add the main data
+            formData.append('how_many_mw_antennas_on_tower', numAntennas);
+            formData.append('mwAntennasData', JSON.stringify(mwAntennasData));
+
+            try {
+                const response = await fetch(`http://localhost:3000/api/mw-antennas/${sessionId}`, {
+                    method: 'PUT',
+                    body: formData
+                });
+
+                const result = await response.json();
+                displayResult(result, response.ok);
+            } catch (error) {
+                displayResult({ error: error.message }, false);
+            }
+        }
+
+        function displayResult(result, success) {
+            const resultDiv = document.getElementById('result');
+            resultDiv.className = `result ${success ? 'success' : 'error'}`;
+            resultDiv.innerHTML = `<pre>${JSON.stringify(result, null, 2)}</pre>`;
+        }
+
+        // Initialize with 2 antennas
+        updateAntennaInputs();
+    </script>
+</body>
+</html> 

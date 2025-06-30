@@ -1,0 +1,203 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Antenna Configuration Test</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        .form-group {
+            margin-bottom: 15px;
+        }
+        label {
+            display: block;
+            margin-bottom: 5px;
+        }
+        input, select {
+            padding: 5px;
+            margin-bottom: 10px;
+        }
+        button {
+            padding: 10px;
+            margin: 5px;
+            cursor: pointer;
+        }
+        .antenna-section {
+            border: 1px solid #ccc;
+            padding: 15px;
+            margin-bottom: 15px;
+            border-radius: 5px;
+        }
+        #response {
+            margin-top: 20px;
+            padding: 10px;
+            border: 1px solid #ccc;
+            background: #f9f9f9;
+            white-space: pre-wrap;
+        }
+    </style>
+</head>
+<body>
+    <h1>Antenna Configuration Test</h1>
+    
+    <form id="antennaForm" enctype="multipart/form-data">
+        <div class="form-group">
+            <label for="sessionId">Session ID:</label>
+            <input type="text" id="sessionId" name="sessionId" value="test-session-123" required>
+        </div>
+        
+        <div class="form-group">
+            <label for="numAntennas">Number of Antennas:</label>
+            <input type="number" id="numAntennas" min="1" max="15" value="2" onchange="generateAntennaInputs()">
+        </div>
+        
+        <div id="antennaContainer"></div>
+        
+        <button type="button" onclick="submitForm()">Submit Antenna Data</button>
+        <button type="button" onclick="submitJSON()">Submit JSON Only (No Images)</button>
+        <button type="button" onclick="getData()">Get Data</button>
+    </form>
+    
+    <div id="response"></div>
+
+    <script>
+        function generateAntennaInputs() {
+            const container = document.getElementById('antennaContainer');
+            const count = parseInt(document.getElementById('numAntennas').value);
+            container.innerHTML = '';
+            
+            for (let i = 1; i <= count; i++) {
+                const section = document.createElement('div');
+                section.className = 'antenna-section';
+                section.innerHTML = `
+                    <h3>Antenna ${i}</h3>
+                    <div class="form-group">
+                        <label>Sector:</label>
+                        <input type="number" name="antenna_${i}_sector" min="1" max="5" value="${i}">
+                    </div>
+                    <div class="form-group">
+                        <label>Technology:</label>
+                        <select name="antenna_${i}_technology" multiple>
+                            <option value="2G">2G</option>
+                            <option value="3G">3G</option>
+                            <option value="4G">4G</option>
+                            <option value="5G">5G</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>Front Photo:</label>
+                        <input type="file" name="antenna_${i}_front" accept="image/*">
+                    </div>
+                    <div class="form-group">
+                        <label>Back Photo:</label>
+                        <input type="file" name="antenna_${i}_back" accept="image/*">
+                    </div>
+                    <div class="form-group">
+                        <label>Side Photo:</label>
+                        <input type="file" name="antenna_${i}_side" accept="image/*">
+                    </div>
+                `;
+                container.appendChild(section);
+            }
+        }
+
+        async function submitForm() {
+            const formData = new FormData();
+            const sessionId = document.getElementById('sessionId').value;
+            const numAntennas = parseInt(document.getElementById('numAntennas').value);
+            
+            // Add session ID
+            formData.append('sessionId', sessionId);
+            
+            // Prepare antennas array
+            const antennas = [];
+            for (let i = 1; i <= numAntennas; i++) {
+                const antenna = {
+                    sector: document.querySelector(`[name="antenna_${i}_sector"]`).value,
+                    technology: Array.from(document.querySelector(`[name="antenna_${i}_technology"]`).selectedOptions).map(opt => opt.value)
+                };
+                antennas.push(antenna);
+            }
+            
+            // Add antenna data as JSON
+            formData.append('antenna_data', JSON.stringify({
+                antenna_count: numAntennas,
+                antennas: antennas
+            }));
+            
+            // Add files
+            for (let i = 1; i <= numAntennas; i++) {
+                const frontFile = document.querySelector(`[name="antenna_${i}_front"]`).files[0];
+                const backFile = document.querySelector(`[name="antenna_${i}_back"]`).files[0];
+                const sideFile = document.querySelector(`[name="antenna_${i}_side"]`).files[0];
+                
+                if (frontFile) formData.append(`antenna_${i}_front`, frontFile);
+                if (backFile) formData.append(`antenna_${i}_back`, backFile);
+                if (sideFile) formData.append(`antenna_${i}_side`, sideFile);
+            }
+            
+            try {
+                const response = await fetch(`/api/antenna-configuration/${sessionId}`, {
+                    method: 'PUT',
+                    body: formData
+                });
+                
+                const result = await response.json();
+                document.getElementById('response').textContent = JSON.stringify(result, null, 2);
+            } catch (error) {
+                document.getElementById('response').textContent = `Error: ${error.message}`;
+            }
+        }
+
+        async function submitJSON() {
+            const sessionId = document.getElementById('sessionId').value;
+            const numAntennas = parseInt(document.getElementById('numAntennas').value);
+            
+            // Prepare antennas array
+            const antennas = [];
+            for (let i = 1; i <= numAntennas; i++) {
+                const antenna = {
+                    sector: document.querySelector(`[name="antenna_${i}_sector"]`).value,
+                    technology: Array.from(document.querySelector(`[name="antenna_${i}_technology"]`).selectedOptions).map(opt => opt.value)
+                };
+                antennas.push(antenna);
+            }
+            
+            try {
+                const response = await fetch(`/api/antenna-configuration/${sessionId}`, {
+                    method: 'PUT',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        antenna_count: numAntennas,
+                        antennas: antennas
+                    })
+                });
+                
+                const result = await response.json();
+                document.getElementById('response').textContent = JSON.stringify(result, null, 2);
+            } catch (error) {
+                document.getElementById('response').textContent = `Error: ${error.message}`;
+            }
+        }
+
+        async function getData() {
+            const sessionId = document.getElementById('sessionId').value;
+            try {
+                const response = await fetch(`/api/antenna-configuration/${sessionId}`);
+                const result = await response.json();
+                document.getElementById('response').textContent = JSON.stringify(result, null, 2);
+            } catch (error) {
+                document.getElementById('response').textContent = `Error: ${error.message}`;
+            }
+        }
+
+        // Generate initial antenna inputs
+        generateAntennaInputs();
+    </script>
+</body>
+</html> 

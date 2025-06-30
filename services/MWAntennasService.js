@@ -48,13 +48,29 @@ class MWAntennasService {
       });
       
       if (updateData) {
+        // Validate that we have the required structure
+        if (!updateData.mwAntennasData || !updateData.mwAntennasData.mw_antennas) {
+          throw {
+            type: 'VALIDATION_ERROR',
+            message: 'Invalid data structure: mwAntennasData.mw_antennas is required'
+          };
+        }
+        
         // Process and validate the update data
-        const processedData = this.processUpdateData(updateData, numberOfCabinets);
+        const processedData = {
+          how_many_mw_antennas_on_tower: updateData.how_many_mw_antennas_on_tower,
+          mw_antennas: updateData.mwAntennasData.mw_antennas.map((antenna, index) => ({
+            antenna_number: index + 1,
+            height: this.validateNumber(antenna.height),
+            diameter: this.validateNumber(antenna.diameter),
+            azimuth: this.validateNumber(antenna.azimuth)
+          }))
+        };
         
         if (record) {
           // If number of antennas decreased, delete excess antenna images
           const currentAntennas = record.mw_antennas_data?.how_many_mw_antennas_on_tower || 1;
-          const newAntennas = processedData.mwAntennasData.how_many_mw_antennas_on_tower;
+          const newAntennas = processedData.how_many_mw_antennas_on_tower;
           
           if (newAntennas < currentAntennas) {
             const MWAntennasImageService = require('./MWAntennasImageService');
@@ -67,7 +83,7 @@ class MWAntennasService {
           // Update existing record
           await record.update({
             number_of_cabinets: numberOfCabinets,
-            mw_antennas_data: processedData.mwAntennasData
+            mw_antennas_data: processedData
           });
           await record.reload();
         } else {
@@ -75,7 +91,7 @@ class MWAntennasService {
           record = await MWAntennas.create({
             session_id: sessionId,
             number_of_cabinets: numberOfCabinets,
-            mw_antennas_data: processedData.mwAntennasData
+            mw_antennas_data: processedData
           });
         }
       } else if (!record) {
@@ -90,6 +106,7 @@ class MWAntennasService {
       return await this.transformToApiResponse(record);
       
     } catch (error) {
+      console.error('Service error:', error);
       throw this.handleError(error);
     }
   }
@@ -98,30 +115,37 @@ class MWAntennasService {
    * Process and validate update data
    */
   static processUpdateData(data, numberOfCabinets) {
-    // Validate how many MW antennas
-    const howManyMWAntennas = this.validateDropdown(data.how_many_mw_antennas_on_tower, 1, 10);
+    // Validate how many MW antennas (between 1 and 10)
+    const howManyMWAntennas = Math.max(1, Math.min(10, parseInt(data.how_many_mw_antennas_on_tower) || 1));
+    
+    // Get antenna data from the request
+    const antennaData = data.mwAntennasData?.mw_antennas || [];
     
     // Create MW antennas array based on the selected quantity
     const mwAntennas = [];
     
-    for (let i = 1; i <= howManyMWAntennas; i++) {
+    // Process each antenna's data
+    for (let i = 0; i < howManyMWAntennas; i++) {
       const antenna = {
-        antenna_number: i,
-        height: this.validateNumber(data[`mw_antenna_${i}_height`] || data.mwAntennasData?.mw_antennas?.[i-1]?.height || 0),
-        diameter: this.validateNumber(data[`mw_antenna_${i}_diameter`] || data.mwAntennasData?.mw_antennas?.[i-1]?.diameter || 0),
-        azimuth: this.validateNumber(data[`mw_antenna_${i}_azimuth`] || data.mwAntennasData?.mw_antennas?.[i-1]?.azimuth || 0)
+        antenna_number: i + 1,
+        height: this.validateNumber(antennaData[i]?.height),
+        diameter: this.validateNumber(antennaData[i]?.diameter),
+        azimuth: this.validateNumber(antennaData[i]?.azimuth)
       };
       mwAntennas.push(antenna);
     }
     
-    const processed = {
+    return {
       mwAntennasData: {
         how_many_mw_antennas_on_tower: howManyMWAntennas,
-        mw_antennas: mwAntennas
+        mw_antennas: mwAntennas.map(antenna => ({
+          ...antenna,
+          height: antenna.height || 0,
+          diameter: antenna.diameter || 0,
+          azimuth: antenna.azimuth || 0
+        }))
       }
     };
-    
-    return processed;
   }
   
   /**

@@ -1,0 +1,191 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>External DC Distribution Test</title>
+    <style>
+        body { font-family: Arial, sans-serif; max-width: 800px; margin: 0 auto; padding: 20px; }
+        .form-group { margin-bottom: 15px; }
+        label { display: block; margin-bottom: 5px; font-weight: bold; }
+        input, select, textarea { width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px; }
+        button { background-color: #007bff; color: white; padding: 10px 20px; border: none; border-radius: 4px; cursor: pointer; }
+        button:hover { background-color: #0056b3; }
+        .pdu-section { border: 1px solid #ddd; padding: 15px; margin: 10px 0; border-radius: 5px; }
+        .file-upload { margin: 10px 0; }
+        #response { margin-top: 20px; padding: 10px; border-radius: 4px; white-space: pre-wrap; }
+        .success { background-color: #d4edda; border: 1px solid #c3e6cb; color: #155724; }
+        .error { background-color: #f8d7da; border: 1px solid #f5c6cb; color: #721c24; }
+    </style>
+</head>
+<body>
+    <h1>External DC Distribution Test</h1>
+    
+    <form id="externalDcForm" enctype="multipart/form-data">
+        <div class="form-group">
+            <label for="sessionId">Session ID:</label>
+            <input type="text" id="sessionId" name="sessionId" value="test-session-123" required>
+        </div>
+        
+        <div class="form-group">
+            <label for="hasSeparateDCPDU">Has Separate DC PDU:</label>
+            <select id="hasSeparateDCPDU" name="has_separate_dc_pdu">
+                <option value="">Select...</option>
+                <option value="Yes">Yes</option>
+                <option value="No">No</option>
+            </select>
+        </div>
+        
+        <div class="form-group">
+            <label for="numPDUs">Number of DC PDUs:</label>
+            <input type="number" id="numPDUs" min="1" max="5" value="2" onchange="generatePDUInputs()">
+        </div>
+        
+        <div id="pduContainer"></div>
+        
+        <button type="button" onclick="submitForm()">Submit External DC Data</button>
+        <button type="button" onclick="submitJSON()">Submit JSON Only (No Images)</button>
+        <button type="button" onclick="getData()">Get Data</button>
+    </form>
+    
+    <div id="response"></div>
+
+    <script>
+        const API_BASE = 'http://localhost:3000/api/external-dc-distribution';
+        
+        function generatePDUInputs() {
+            const numPDUs = parseInt(document.getElementById('numPDUs').value) || 1;
+            const container = document.getElementById('pduContainer');
+            container.innerHTML = '';
+            
+            for (let i = 1; i <= numPDUs; i++) {
+                const pduDiv = document.createElement('div');
+                pduDiv.className = 'pdu-section';
+                pduDiv.innerHTML = `
+                    <h3>PDU ${i}</h3>
+                    <div class="form-group">
+                        <label for="pdu_${i}_cabinet_ref">Cabinet Reference:</label>
+                        <input type="text" id="pdu_${i}_cabinet_ref" name="pdu_${i}_cabinet_ref" 
+                               placeholder="e.g., Cabinet 1 - BLVD 1">
+                    </div>
+                    <div class="form-group">
+                        <label for="pdu_${i}_dc_cb_fuse_rating">DC CB/Fuse Rating:</label>
+                        <input type="text" id="pdu_${i}_dc_cb_fuse_rating" name="pdu_${i}_dc_cb_fuse_rating" 
+                               placeholder="e.g., 32A Fuse">
+                    </div>
+                    <div class="form-group">
+                        <label for="pdu_${i}_connected_load_description">Connected Load Description:</label>
+                        <input type="text" id="pdu_${i}_connected_load_description" name="pdu_${i}_connected_load_description" 
+                               placeholder="e.g., External DC PDU 1">
+                    </div>
+                    <div class="form-group">
+                        <label for="pdu_${i}_cable_size">Cable Size:</label>
+                        <input type="text" id="pdu_${i}_cable_size" name="pdu_${i}_cable_size" 
+                               placeholder="e.g., 16mm²">
+                    </div>
+                    <div class="form-group">
+                        <label for="pdu_${i}_cable_length">Cable Length (m):</label>
+                        <input type="number" id="pdu_${i}_cable_length" name="pdu_${i}_cable_length" 
+                               step="0.1" placeholder="e.g., 5.5">
+                    </div>
+                    <div class="form-group">
+                        <label for="pdu_${i}_remarks">Remarks:</label>
+                        <textarea id="pdu_${i}_remarks" name="pdu_${i}_remarks" rows="2" 
+                                  placeholder="Any additional notes..."></textarea>
+                    </div>
+                    <div class="file-upload">
+                        <label for="pdu_${i}_photo">PDU ${i} Photo:</label>
+                        <input type="file" id="pdu_${i}_photo" name="pdu_${i}_photo" accept="image/*">
+                    </div>
+                `;
+                container.appendChild(pduDiv);
+            }
+        }
+        
+        async function submitForm() {
+            const form = document.getElementById('externalDcForm');
+            const formData = new FormData(form);
+            
+            // Add the number of PDUs
+            const numPDUs = document.getElementById('numPDUs').value;
+            formData.append('how_many_dc_pdus', numPDUs);
+            
+            const sessionId = document.getElementById('sessionId').value;
+            
+            try {
+                const response = await fetch(`${API_BASE}/${sessionId}`, {
+                    method: 'PUT',
+                    body: formData
+                });
+                
+                const result = await response.json();
+                displayResponse(result, response.ok);
+            } catch (error) {
+                displayResponse({ error: error.message }, false);
+            }
+        }
+        
+        async function submitJSON() {
+            const sessionId = document.getElementById('sessionId').value;
+            const numPDUs = parseInt(document.getElementById('numPDUs').value) || 1;
+            
+            const dc_pdus = [];
+            for (let i = 1; i <= numPDUs; i++) {
+                dc_pdus.push({
+                    cabinet_ref: document.getElementById(`pdu_${i}_cabinet_ref`)?.value || '',
+                    dc_cb_fuse_rating: document.getElementById(`pdu_${i}_dc_cb_fuse_rating`)?.value || '',
+                    connected_load_description: document.getElementById(`pdu_${i}_connected_load_description`)?.value || '',
+                    cable_size: document.getElementById(`pdu_${i}_cable_size`)?.value || '',
+                    cable_length: parseFloat(document.getElementById(`pdu_${i}_cable_length`)?.value) || 0,
+                    remarks: document.getElementById(`pdu_${i}_remarks`)?.value || ''
+                });
+            }
+            
+            const data = {
+                has_separate_dc_pdu: document.getElementById('hasSeparateDCPDU').value,
+                how_many_dc_pdus: numPDUs,
+                externalDCData: {
+                    has_separate_dc_pdu: document.getElementById('hasSeparateDCPDU').value,
+                    dc_pdus: dc_pdus
+                }
+            };
+            
+            try {
+                const response = await fetch(`${API_BASE}/${sessionId}`, {
+                    method: 'PUT',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(data)
+                });
+                
+                const result = await response.json();
+                displayResponse(result, response.ok);
+            } catch (error) {
+                displayResponse({ error: error.message }, false);
+            }
+        }
+        
+        async function getData() {
+            const sessionId = document.getElementById('sessionId').value;
+            
+            try {
+                const response = await fetch(`${API_BASE}/${sessionId}`);
+                const result = await response.json();
+                displayResponse(result, response.ok);
+            } catch (error) {
+                displayResponse({ error: error.message }, false);
+            }
+        }
+        
+        function displayResponse(data, isSuccess) {
+            const responseDiv = document.getElementById('response');
+            responseDiv.textContent = JSON.stringify(data, null, 2);
+            responseDiv.className = isSuccess ? 'success' : 'error';
+        }
+        
+        // Initialize form
+        generatePDUInputs();
+    </script>
+</body>
+</html> 

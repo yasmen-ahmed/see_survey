@@ -3,6 +3,9 @@ const router = express.Router();
 const AntennaConfiguration = require('../models/AntennaConfiguration');
 const OutdoorCabinets = require('../models/OutdoorCabinets');
 const { Op } = require('sequelize');
+const AntennaConfigurationService = require('../services/AntennaConfigurationService');
+const { uploadAnyWithErrorHandling } = require('../middleware/upload');
+const AntennaImageService = require('../services/AntennaImageService');
 
 // Helper function to get cabinet count from OutdoorCabinets
 const getCabinetCount = async (sessionId) => {
@@ -196,300 +199,207 @@ const validateAntennaData = (antenna, index) => {
   return errors;
 };
 
-// GET /api/antenna-configuration/:session_id
-router.get('/:session_id', async (req, res) => {
+/**
+ * GET /api/antenna-configuration/:sessionId
+ * Get Antenna Configuration data by session ID
+ */
+router.get('/:sessionId', async (req, res) => {
   try {
-    const { session_id } = req.params;
-    const { with_defaults } = req.query; // New query parameter
-
-    const [antennaConfig, cabinetCount] = await Promise.all([
-      AntennaConfiguration.findOne({
-        where: { session_id }
-      }),
-      getCabinetCount(session_id)
-    ]);
-
-    if (!antennaConfig) {
-      // Return default structure with empty strings and 0 values
-      return res.json(getDefaultResponseStructure(session_id, cabinetCount));
-    }
-
-    // If with_defaults=true is passed, ensure antennas have all default fields
-    let antennas = antennaConfig.antennas || [];
-    if (with_defaults === 'true') {
-      antennas = antennas.map(antenna => ({
-        ...getDefaultAntennaStructure(),
-        ...antenna
-      }));
-    }
-
-    const response = {
-      session_id: antennaConfig.session_id,
-      antenna_count: antennaConfig.antenna_count || 0,
-      antennas: antennas,
-      created_at: antennaConfig.created_at,
-      updated_at: antennaConfig.updated_at,
-      number_of_cabinets: cabinetCount
-    };
-
-    res.json(response);
-  } catch (error) {
-    console.error('Error fetching antenna configuration:', error);
-    res.status(500).json({ error: 'Internal server error', details: error.message });
-  }
-});
-
-// GET /api/antenna-configuration/default/antenna-structure
-router.get('/default/antenna-structure', async (req, res) => {
-  try {
-    // Return a single default antenna structure for frontend use
-    const defaultAntenna = getDefaultAntennaStructure();
-    res.json(defaultAntenna);
-  } catch (error) {
-    console.error('Error getting default antenna structure:', error);
-    res.status(500).json({ error: 'Internal server error', details: error.message });
-  }
-});
-
-// POST /api/antenna-configuration/:session_id
-router.post('/:session_id', async (req, res) => {
-  try {
-    const { session_id } = req.params;
-    const { antenna_count, antennas } = req.body;
-
-    // Validate antenna count
-    if (antenna_count !== undefined && (antenna_count < 1 || antenna_count > 15)) {
-      return res.status(400).json({ error: 'Antenna count must be between 1 and 15' });
-    }
-
-    // Validate antennas array
-    let validationErrors = [];
-    if (antennas && Array.isArray(antennas)) {
-      antennas.forEach((antenna, index) => {
-        const errors = validateAntennaData(antenna, index);
-        validationErrors = validationErrors.concat(errors);
-      });
-    }
-
-    if (validationErrors.length > 0) {
-      return res.status(400).json({ error: 'Validation errors', details: validationErrors });
-    }
-
-    const [antennaConfig, created] = await AntennaConfiguration.upsert({
-      session_id,
-      antenna_count: antenna_count || 0,
-      antennas: antennas || [],
-      updated_at: new Date()
-    });
-
-    const cabinetCount = await getCabinetCount(session_id);
-
-    const response = {
-      session_id: antennaConfig.session_id,
-      antenna_count: antennaConfig.antenna_count,
-      antennas: antennaConfig.antennas,
-      created_at: antennaConfig.created_at,
-      updated_at: antennaConfig.updated_at,
-      number_of_cabinets: cabinetCount
-    };
-
-    res.status(created ? 201 : 200).json(response);
-  } catch (error) {
-    console.error('Error creating/updating antenna configuration:', error);
-    res.status(500).json({ error: 'Internal server error', details: error.message });
-  }
-});
-
-// PUT /api/antenna-configuration/:session_id (Full update)
-router.put('/:session_id', async (req, res) => {
-  try {
-    const { session_id } = req.params;
-    const { antenna_count, antennas } = req.body;
-
-    // Validate antenna count
-    if (antenna_count !== undefined && (antenna_count < 1 || antenna_count > 15)) {
-      return res.status(400).json({ error: 'Antenna count must be between 1 and 15' });
-    }
-
-    // Validate antennas array
-    let validationErrors = [];
-    if (antennas && Array.isArray(antennas)) {
-      antennas.forEach((antenna, index) => {
-        const errors = validateAntennaData(antenna, index);
-        validationErrors = validationErrors.concat(errors);
-      });
-    }
-
-    if (validationErrors.length > 0) {
-      return res.status(400).json({ error: 'Validation errors', details: validationErrors });
-    }
-
-    const [antennaConfig, created] = await AntennaConfiguration.upsert({
-      session_id,
-      antenna_count: antenna_count || 0,
-      antennas: antennas || [],
-      updated_at: new Date()
-    });
-
-    const cabinetCount = await getCabinetCount(session_id);
-
-    const response = {
-      session_id: antennaConfig.session_id,
-      antenna_count: antennaConfig.antenna_count,
-      antennas: antennaConfig.antennas,
-      created_at: antennaConfig.created_at,
-      updated_at: antennaConfig.updated_at,
-      number_of_cabinets: cabinetCount
-    };
-
-    res.json(response);
-  } catch (error) {
-    console.error('Error updating antenna configuration:', error);
-    res.status(500).json({ error: 'Internal server error', details: error.message });
-  }
-});
-
-// PUT /api/antenna-configuration/:session_id (Partial update)
-router.put('/:session_id', async (req, res) => {
-  try {
-    const { session_id } = req.params;
-    const updateData = req.body;
-
-    // Find existing configuration
-    let antennaConfig = await AntennaConfiguration.findOne({
-      where: { session_id }
-    });
-
-    if (!antennaConfig) {
-      // Create new if doesn't exist
-      antennaConfig = await AntennaConfiguration.create({
-        session_id,
-        antenna_count: 0,
-        antennas: []
-      });
-    }
-
-    // Validate antenna count if provided
-    if (updateData.antenna_count !== undefined && (updateData.antenna_count < 1 || updateData.antenna_count > 15)) {
-      return res.status(400).json({ error: 'Antenna count must be between 1 and 15' });
-    }
-
-    // Validate antennas if provided
-    let validationErrors = [];
-    if (updateData.antennas && Array.isArray(updateData.antennas)) {
-      updateData.antennas.forEach((antenna, index) => {
-        const errors = validateAntennaData(antenna, index);
-        validationErrors = validationErrors.concat(errors);
-      });
-    }
-
-    if (validationErrors.length > 0) {
-      return res.status(400).json({ error: 'Validation errors', details: validationErrors });
-    }
-
-    // Update only provided fields
-    const fieldsToUpdate = {};
-    if (updateData.antenna_count !== undefined) fieldsToUpdate.antenna_count = updateData.antenna_count;
-    if (updateData.antennas !== undefined) fieldsToUpdate.antennas = updateData.antennas;
-    fieldsToUpdate.updated_at = new Date();
-
-    await antennaConfig.update(fieldsToUpdate);
-
-    const cabinetCount = await getCabinetCount(session_id);
-
-    const response = {
-      session_id: antennaConfig.session_id,
-      antenna_count: antennaConfig.antenna_count,
-      antennas: antennaConfig.antennas,
-      created_at: antennaConfig.created_at,
-      updated_at: antennaConfig.updated_at,
-      number_of_cabinets: cabinetCount
-    };
-
-    res.json(response);
-  } catch (error) {
-    console.error('Error partially updating antenna configuration:', error);
-    res.status(500).json({ error: 'Internal server error', details: error.message });
-  }
-});
-
-// PUT /api/antenna-configuration/:session_id/antenna/:antenna_index (Update specific antenna)
-router.put('/:session_id/antenna/:antenna_index', async (req, res) => {
-  try {
-    const { session_id, antenna_index } = req.params;
-    const antennaData = req.body;
-    const index = parseInt(antenna_index);
-
-    if (isNaN(index) || index < 0) {
-      return res.status(400).json({ error: 'Invalid antenna index' });
-    }
-
-    // Find existing configuration
-    let antennaConfig = await AntennaConfiguration.findOne({
-      where: { session_id }
-    });
-
-    if (!antennaConfig) {
-      return res.status(404).json({ error: 'Antenna configuration not found' });
-    }
-
-    // Validate antenna data
-    const validationErrors = validateAntennaData(antennaData, index);
-    if (validationErrors.length > 0) {
-      return res.status(400).json({ error: 'Validation errors', details: validationErrors });
-    }
-
-    // Update specific antenna
-    const antennas = antennaConfig.antennas || [];
+    const { sessionId } = req.params;
     
-    // Ensure array is large enough
-    while (antennas.length <= index) {
-      antennas.push({});
-    }
-
-    // Merge new data with existing antenna data
-    antennas[index] = { ...antennas[index], ...antennaData };
-
-    await antennaConfig.update({
-      antennas,
-      updated_at: new Date()
+    const result = await AntennaConfigurationService.getOrCreateBySessionId(sessionId);
+    
+    res.status(200).json({
+      success: true,
+      data: result,
+      message: 'Antenna Configuration data retrieved successfully'
     });
-
-    const cabinetCount = await getCabinetCount(session_id);
-
-    const response = {
-      session_id: antennaConfig.session_id,
-      antenna_count: antennaConfig.antenna_count,
-      antennas: antennaConfig.antennas,
-      created_at: antennaConfig.created_at,
-      updated_at: antennaConfig.updated_at,
-      number_of_cabinets: cabinetCount
-    };
-
-    res.json(response);
+    
   } catch (error) {
-    console.error('Error updating specific antenna:', error);
-    res.status(500).json({ error: 'Internal server error', details: error.message });
+    console.error('Error getting Antenna Configuration data:', error);
+    
+    const statusCode = error.type === 'VALIDATION_ERROR' ? 400 : 
+                      error.type === 'FOREIGN_KEY_ERROR' ? 404 : 500;
+    
+    res.status(statusCode).json({
+      success: false,
+      error: {
+        type: error.type || 'INTERNAL_ERROR',
+        message: error.message || 'Failed to retrieve Antenna Configuration data'
+      }
+    });
   }
 });
 
-// DELETE /api/antenna-configuration/:session_id
-router.delete('/:session_id', async (req, res) => {
+/**
+ * PUT /api/antenna-configuration/:sessionId
+ * Update Antenna Configuration data and handle image uploads
+ */
+router.put('/:sessionId', uploadAnyWithErrorHandling, async (req, res) => {
   try {
-    const { session_id } = req.params;
+    const { sessionId } = req.params;
+    let updateData = req.body;
 
-    const deleted = await AntennaConfiguration.destroy({
-      where: { session_id }
-    });
-
-    if (!deleted) {
-      return res.status(404).json({ error: 'Antenna configuration not found' });
+    // Parse antenna_data if it's a string
+    if (typeof updateData.antenna_data === 'string') {
+      try {
+        updateData = JSON.parse(updateData.antenna_data);
+      } catch (err) {
+        return res.status(400).json({
+          success: false,
+          error: { type: 'VALIDATION_ERROR', message: 'Invalid antenna_data JSON format' }
+        });
+      }
     }
 
-    res.json({ message: 'Antenna configuration deleted successfully' });
+    // Validate that we have data to update
+    if (!updateData || typeof updateData !== 'object') {
+      return res.status(400).json({
+        success: false,
+        error: { type: 'VALIDATION_ERROR', message: 'No valid data provided for update' }
+      });
+    }
+
+    // Check if antennas exists and is an array
+    if (!updateData.antennas || !Array.isArray(updateData.antennas)) {
+      return res.status(400).json({
+        success: false,
+        error: { type: 'VALIDATION_ERROR', message: 'antennas is required and must be an array' }
+      });
+    }
+
+    // Validate each antenna in the array
+    for (let i = 0; i < updateData.antennas.length; i++) {
+      const antenna = updateData.antennas[i];
+      
+      if (!antenna || typeof antenna !== 'object') {
+        return res.status(400).json({
+          success: false,
+          error: { type: 'VALIDATION_ERROR', message: `Antenna at index ${i} must be an object` }
+        });
+      }
+    }
+
+    // Update Antenna Configuration data
+    let result = await AntennaConfigurationService.getOrCreateBySessionId(sessionId, updateData);
+
+    // Handle image uploads if present
+    const imageResults = [];
+    let hasImageUploadFailures = false;
+    
+    if (req.files && req.files.length > 0) {
+      for (const file of req.files) {
+        try {
+          const field = file.fieldname;
+          let antenna_number;
+          
+          // Parse antenna number from field name (e.g., antenna_1_front)
+          const match = field.match(/antenna_(\d+)_/);
+          
+          if (!match) {
+            throw new Error(`Invalid field name format: ${field}. Expected antenna_X_* format`);
+          }
+          
+          antenna_number = parseInt(match[1], 10);
+          
+          if (!antenna_number || antenna_number > updateData.antennas.length) {
+            throw new Error(`Invalid antenna number ${antenna_number} in field ${field}. Must be between 1 and ${updateData.antennas.length}`);
+          }
+
+          const replaceRes = await AntennaImageService.replaceImage({
+            file,
+            session_id: sessionId,
+            antenna_number,
+            image_category: field,
+            description: updateData[`${field}_description`] || null
+          });
+          imageResults.push({ field, success: true, data: replaceRes.data });
+        } catch (err) {
+          hasImageUploadFailures = true;
+          imageResults.push({ field: file.fieldname, success: false, error: err.message });
+        }
+      }
+      
+      // Refresh result to include updated images
+      result = await AntennaConfigurationService.getOrCreateBySessionId(sessionId);
+    }
+
+    const successCount = imageResults.filter(r => r.success).length;
+    const failCount = imageResults.filter(r => !r.success).length;
+
+    const response = {
+      success: !hasImageUploadFailures,
+      data: result,
+      message: 'Antenna Configuration data updated successfully'
+    };
+    
+    if (imageResults.length > 0) {
+      response.images_processed = {
+        total: imageResults.length,
+        successful: successCount,
+        failed: failCount,
+        details: imageResults
+      };
+      
+      if (hasImageUploadFailures) {
+        response.message = `Antenna Configuration data updated but ${failCount} image upload(s) failed`;
+      } else {
+        response.message += ` and ${successCount} image(s) processed`;
+      }
+    }
+
+    res.status(200).json(response);
+    
   } catch (error) {
-    console.error('Error deleting antenna configuration:', error);
-    res.status(500).json({ error: 'Internal server error', details: error.message });
+    console.error('Error updating Antenna Configuration data:', error);
+    const statusCode = error.type === 'VALIDATION_ERROR' ? 400 : 
+                      error.type === 'FOREIGN_KEY_ERROR' ? 404 : 
+                      error.type === 'DUPLICATE_ERROR' ? 409 : 500;
+                      
+    res.status(statusCode).json({
+      success: false,
+      error: {
+        type: error.type || 'INTERNAL_ERROR',
+        message: error.message || 'Failed to update Antenna Configuration data'
+      }
+    });
+  }
+});
+
+/**
+ * DELETE /api/antenna-configuration/:sessionId
+ * Delete Antenna Configuration data and associated images
+ */
+router.delete('/:sessionId', async (req, res) => {
+  try {
+    const { sessionId } = req.params;
+
+    const result = await AntennaConfigurationService.deleteBySessionId(sessionId);
+
+    if (!result.deleted) {
+      return res.status(404).json({
+        success: false,
+        error: { type: 'NOT_FOUND', message: 'Antenna Configuration not found' }
+      });
+    }
+
+    res.json({
+      success: true,
+      message: 'Antenna Configuration deleted successfully',
+      data: result
+    });
+  } catch (error) {
+    console.error('Error deleting Antenna Configuration:', error);
+    
+    const statusCode = error.type === 'VALIDATION_ERROR' ? 400 : 500;
+    
+    res.status(statusCode).json({
+      success: false,
+      error: {
+        type: error.type || 'INTERNAL_ERROR',
+        message: error.message || 'Failed to delete Antenna Configuration'
+      }
+    });
   }
 });
 

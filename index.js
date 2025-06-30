@@ -18,7 +18,27 @@ app.use(cors({
   credentials: true
 }));
 
-app.use(express.json());
+// Body parsing middleware - handle different content types
+app.use(express.json({ limit: '50mb' }));
+app.use(express.urlencoded({ extended: true, limit: '50mb' }));
+app.use(express.text({ type: 'text/plain', limit: '50mb' }));
+
+// Custom middleware to parse JSON from text/plain if needed
+app.use((req, res, next) => {
+  if (req.headers['content-type'] === 'text/plain' && req.body) {
+    try {
+      // Try to parse the body as JSON if it's a string
+      if (typeof req.body === 'string') {
+        const parsed = JSON.parse(req.body);
+        req.body = parsed;
+      }
+    } catch (error) {
+      // If parsing fails, leave the body as is
+      console.warn('Failed to parse text/plain body as JSON:', error.message);
+    }
+  }
+  next();
+});
 
 // Serve static files for uploaded images
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
@@ -52,6 +72,7 @@ const newRadioUnitsRoutes = require('./routes/newRadioUnitsRoutes');
 const newFPFHsRoutes = require('./routes/newFPFHsRoutes');
 const newGPSRoutes = require('./routes/newGPSRoutes');
 const siteImagesRoutes = require('./routes/siteImagesRoutes');
+const exportRoutes = require('./routes/exportRoutes');
 // Health & Safety routes
 const healthSafetySiteAccessRoutes = require('./routes/healthSafetySiteAccessRoutes');
 const healthSafetyBTSAccessRoutes = require('./routes/healthSafetyBTSAccessRoutes');
@@ -140,6 +161,7 @@ app.use('/api/new-radio-units', newRadioUnitsRoutes);
 app.use('/api/new-fpfh', newFPFHsRoutes);
 app.use('/api/new-gps', newGPSRoutes);
 app.use('/api/site-images', siteImagesRoutes);
+app.use('/api/export', exportRoutes);
 // Health & Safety route registrations
 app.use('/api/health-safety-site-access', healthSafetySiteAccessRoutes);
 app.use('/api/health-safety-bts-access', healthSafetyBTSAccessRoutes);
