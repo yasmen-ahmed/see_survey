@@ -99,6 +99,9 @@ const HealthSafetySiteAccess = require('./models/HealthSafetySiteAccess');
 const HealthSafetyBTSAccess = require('./models/HealthSafetyBTSAccess');
 const MWAntennasImages = require('./models/MWAntennasImages');
 
+// Load AC Connection associations
+require('./models/associations');
+
 User.hasMany(Survey, { foreignKey: 'user_id', as: 'surveys' });
 User.hasMany(Survey, { foreignKey: 'creator_id', as: 'createdSurveys' });
 Survey.belongsTo(User, { foreignKey: 'user_id', as: 'user' });

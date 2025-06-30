@@ -1,5 +1,7 @@
-const AcConnectionInfo = require('../models/AcConnectionInfo');
+const { AcConnectionInfo, AcConnectionImages } = require('../models/associations');
 const Survey = require('../models/Survey');
+const fs = require('fs');
+const path = require('path');
 
 class AcConnectionService {
   
@@ -7,37 +9,100 @@ class AcConnectionService {
    * Get or create AC connection info for a session
    * This implements the single endpoint pattern for both GET and PUT
    */
-  static async getOrCreateBySessionId(sessionId, updateData = null) {
+  static async getOrCreateBySessionId(sessionId, updateData = null, imageFile = null) {
     try {
       // Validate session exists
       await this.validateSession(sessionId);
       
-      // Find existing record
+      // Find existing record with images
       let record = await AcConnectionInfo.findOne({ 
-        where: { session_id: sessionId } 
+        where: { session_id: sessionId },
+        include: [{
+          model: AcConnectionImages,
+          as: 'images',
+          where: { is_active: true },
+          required: false
+        }]
       });
       
-      if (updateData) {
-        // PUT operation - create or update
-        if (record) {
-          // Update existing record
-          const processedData = this.processUpdateData(updateData);
-          await record.update(processedData);
-          record.reload(); // Refresh from database
-        } else {
-          // Create new record
-          const processedData = this.processUpdateData(updateData);
-          record = await AcConnectionInfo.create({
-            session_id: sessionId,
-            ...processedData
-          });
-        }
-      } else if (!record) {
-        // GET operation - return defaults if no record exists
-        return this.getDefaultResponse();
+      // If no record exists, create one with default values
+      if (!record) {
+        record = await AcConnectionInfo.create({
+          session_id: sessionId,
+          power_sources: [],
+          diesel_config: null,
+          solar_config: null
+        });
+        // Reload to get associations
+        record = await AcConnectionInfo.findOne({
+          where: { session_id: sessionId },
+          include: [{
+            model: AcConnectionImages,
+            as: 'images',
+            where: { is_active: true },
+            required: false
+          }]
+        });
       }
       
-      // Transform database record to API response format
+      // Handle data update if provided
+      if (updateData && Object.keys(updateData).length > 0) {
+        const processedData = this.processUpdateData(updateData);
+        await record.update(processedData);
+        record = await record.reload({ 
+          include: [{
+            model: AcConnectionImages,
+            as: 'images',
+            where: { is_active: true },
+            required: false
+          }]
+        });
+      }
+
+      // Handle image upload if provided
+      if (imageFile) {
+        const imageCategory = imageFile.fieldname || 'generator_photo';
+        const timestamp = Date.now();
+        const filename = `ac_connection_${timestamp}_${imageFile.originalname.replace(/[^a-zA-Z0-9.-]/g, '_')}`;
+        
+        // Create uploads directory if it doesn't exist
+        const uploadDir = path.join(process.cwd(), 'uploads', 'ac_connection');
+        if (!fs.existsSync(uploadDir)) {
+          fs.mkdirSync(uploadDir, { recursive: true });
+        }
+        
+        // Save file to disk
+        const filePath = path.join(uploadDir, filename);
+        fs.writeFileSync(filePath, imageFile.buffer);
+        
+        const imageData = {
+          session_id: sessionId,
+          table_id: record.id,
+          image_category: imageCategory,
+          original_filename: imageFile.originalname,
+          stored_filename: filename,
+          file_path: filePath,
+          file_url: `/uploads/ac_connection/${filename}`,
+          file_size: imageFile.size,
+          mime_type: imageFile.mimetype,
+          is_active: true
+        };
+
+        await AcConnectionImages.create(imageData);
+
+        // Reload record to get updated images
+        record = await AcConnectionInfo.findOne({
+          where: { session_id: sessionId },
+          include: [{
+            model: AcConnectionImages,
+            as: 'images',
+            where: { is_active: true },
+            required: false
+          }]
+        });
+      }
+      
+      // Transform and return the response
       return this.transformToApiResponse(record);
       
     } catch (error) {
@@ -126,6 +191,7 @@ class AcConnectionService {
       power_sources: data.power_sources || [],
       diesel_config: data.diesel_config,
       solar_config: data.solar_config,
+      images: data.images || [],
       metadata: {
         created_at: data.created_at,
         updated_at: data.updated_at
@@ -141,6 +207,7 @@ class AcConnectionService {
       power_sources: [],
       diesel_config: null,
       solar_config: null,
+      images: [],
       metadata: {
         created_at: null,
         updated_at: null

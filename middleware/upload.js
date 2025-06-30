@@ -44,7 +44,11 @@ const imageCategories = [
   'cables_route_photo_from_tower_top_1',
   'cables_route_photo_from_tower_top_2',
   'general_structure_photo',
-  'custom_photo'
+  'custom_photo',
+  // AC Connection categories
+  'generator_photo',
+  'ac_panel_photo',
+  'power_meter_photo'
 ];
 
 // Middleware for single file upload

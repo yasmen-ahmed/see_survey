@@ -1,5 +1,7 @@
-const PowerMeter = require('../models/PowerMeter');
+const { PowerMeter, PowerMeterImages } = require('../models/associations');
 const Survey = require('../models/Survey');
+const fs = require('fs');
+const path = require('path');
 
 class PowerMeterService {
   
@@ -7,37 +9,102 @@ class PowerMeterService {
    * Get or create Power Meter info for a session
    * This implements the single endpoint pattern for both GET and PUT
    */
-  static async getOrCreateBySessionId(sessionId, updateData = null) {
+  static async getOrCreateBySessionId(sessionId, updateData = null, imageFile = null) {
     try {
       // Validate session exists
       await this.validateSession(sessionId);
       
-      // Find existing record
+      // Find existing record with images
       let record = await PowerMeter.findOne({ 
-        where: { session_id: sessionId } 
+        where: { session_id: sessionId },
+        include: [{
+          model: PowerMeterImages,
+          as: 'images',
+          where: { is_active: true },
+          required: false
+        }]
       });
       
-      if (updateData) {
-        // PUT operation - create or update
-        if (record) {
-          // Update existing record
-          const processedData = this.processUpdateData(updateData);
-          await record.update(processedData);
-          await record.reload(); // Refresh from database
-        } else {
-          // Create new record
-          const processedData = this.processUpdateData(updateData);
-          record = await PowerMeter.create({
-            session_id: sessionId,
-            ...processedData
-          });
+      if (!record) {
+        // Create new record with default values
+        record = await PowerMeter.create({
+          session_id: sessionId,
+          serial_number: '',
+          meter_reading: null,
+          ac_power_source_type: null,
+          power_cable_config: null,
+          main_cb_config: null
+        });
+        // Reload to get associations
+        record = await PowerMeter.findOne({
+          where: { session_id: sessionId },
+          include: [{
+            model: PowerMeterImages,
+            as: 'images',
+            where: { is_active: true },
+            required: false
+          }]
+        });
+      }
+
+      // Handle data update if provided
+      if (updateData && Object.keys(updateData).length > 0) {
+        const processedData = this.processUpdateData(updateData);
+        await record.update(processedData);
+        record = await record.reload({
+          include: [{
+            model: PowerMeterImages,
+            as: 'images',
+            where: { is_active: true },
+            required: false
+          }]
+        });
+      }
+
+      // Handle image upload if provided
+      if (imageFile) {
+        const imageCategory = imageFile.fieldname || 'power_meter_photo';
+        const timestamp = Date.now();
+        const filename = `power_meter_${timestamp}_${imageFile.originalname.replace(/[^a-zA-Z0-9.-]/g, '_')}`;
+        
+        // Create uploads directory if it doesn't exist
+        const uploadDir = path.join(process.cwd(), 'uploads', 'power_meter');
+        if (!fs.existsSync(uploadDir)) {
+          fs.mkdirSync(uploadDir, { recursive: true });
         }
-      } else if (!record) {
-        // GET operation - return defaults if no record exists
-        return this.getDefaultResponse();
+        
+        // Save file to disk
+        const filePath = path.join(uploadDir, filename);
+        fs.writeFileSync(filePath, imageFile.buffer);
+        
+        const imageData = {
+          session_id: sessionId,
+          table_id: record.id,
+          image_category: imageCategory,
+          original_filename: imageFile.originalname,
+          stored_filename: filename,
+          file_path: filePath,
+          file_url: `/uploads/power_meter/${filename}`,
+          file_size: imageFile.size,
+          mime_type: imageFile.mimetype,
+          is_active: true
+        };
+
+        await PowerMeterImages.create(imageData);
+
+        // Reload record to get updated images
+        record = await PowerMeter.findOne({
+          where: { session_id: sessionId },
+          include: [{
+            model: PowerMeterImages,
+            as: 'images',
+            where: { is_active: true },
+            required: false
+          }]
+        });
       }
       
-      // Transform database record to API response format
+      // Transform and return the response
       return this.transformToApiResponse(record);
       
     } catch (error) {
@@ -149,6 +216,7 @@ class PowerMeterService {
         rating: null,
         type: null
       },
+      images: data.images || [],
       metadata: {
         created_at: data.created_at,
         updated_at: data.updated_at
@@ -172,6 +240,7 @@ class PowerMeterService {
         rating: null,
         type: null
       },
+      images: [],
       metadata: {
         created_at: null,
         updated_at: null

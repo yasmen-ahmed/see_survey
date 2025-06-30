@@ -1,5 +1,7 @@
-const AcPanel = require('../models/AcPanel');
+const { AcPanel, AcPanelImages } = require('../models/associations');
 const Survey = require('../models/Survey');
+const fs = require('fs').promises;
+const path = require('path');
 
 class AcPanelService {
   
@@ -7,37 +9,113 @@ class AcPanelService {
    * Get or create AC Panel info for a session
    * This implements the single endpoint pattern for both GET and PUT
    */
-  static async getOrCreateBySessionId(sessionId, updateData = null) {
+  static async getOrCreateBySessionId(sessionId, updateData = null, imageFile = null) {
     try {
       // Validate session exists
       await this.validateSession(sessionId);
       
-      // Find existing record
+      // Find existing record with images
       let record = await AcPanel.findOne({ 
-        where: { session_id: sessionId } 
+        where: { session_id: sessionId },
+        include: [{
+          model: AcPanelImages,
+          as: 'images',
+          where: { is_active: true },
+          required: false
+        }]
       });
       
-      if (updateData) {
-        // PUT operation - create or update
-        if (record) {
-          // Update existing record
-          const processedData = this.processUpdateData(updateData);
-          await record.update(processedData);
-          await record.reload(); // Refresh from database
-        } else {
-          // Create new record
-          const processedData = this.processUpdateData(updateData);
-          record = await AcPanel.create({
-            session_id: sessionId,
-            ...processedData
-          });
-        }
-      } else if (!record) {
-        // GET operation - return defaults if no record exists
-        return this.getDefaultResponse();
+      if (!record) {
+        // Create new record with default values
+        record = await AcPanel.create({
+          session_id: sessionId,
+          power_cable_config: null,
+          main_cb_config: null,
+          has_free_cbs: null,
+          cb_fuse_data: [],
+          free_cb_spaces: null
+        });
+        // Reload to get associations
+        record = await AcPanel.findOne({
+          where: { session_id: sessionId },
+          include: [{
+            model: AcPanelImages,
+            as: 'images',
+            where: { is_active: true },
+            required: false
+          }]
+        });
+      }
+
+      // Handle data update if provided
+      if (updateData && Object.keys(updateData).length > 0) {
+        const processedData = this.processUpdateData(updateData);
+        await record.update(processedData);
+        record = await record.reload({
+          include: [{
+            model: AcPanelImages,
+            as: 'images',
+            where: { is_active: true },
+            required: false
+          }]
+        });
+      }
+
+      // Handle image upload if provided
+      if (imageFile) {
+        const imageCategory = imageFile.fieldname;
+        const timestamp = Date.now();
+        const filename = `ac_panel_${timestamp}_${path.basename(imageFile.originalname).replace(/[^a-zA-Z0-9.-]/g, '_')}`;
+        
+        // Create uploads directory if it doesn't exist
+        const uploadDir = path.join(process.cwd(), 'uploads', 'ac_panel');
+        await fs.mkdir(uploadDir, { recursive: true });
+        
+        // Find and deactivate existing image of the same category
+        await AcPanelImages.update(
+          { is_active: false },
+          { 
+            where: { 
+              session_id: sessionId,
+              table_id: record.id,
+              image_category: imageCategory,
+              is_active: true
+            }
+          }
+        );
+        
+        // Save file to disk
+        const filePath = path.join(uploadDir, filename);
+        await fs.writeFile(filePath, imageFile.buffer);
+        
+        const imageData = {
+          session_id: sessionId,
+          table_id: record.id,
+          image_category: imageCategory,
+          original_filename: imageFile.originalname,
+          stored_filename: filename,
+          file_path: filePath,
+          file_url: `/uploads/ac_panel/${filename}`,
+          file_size: imageFile.size,
+          mime_type: imageFile.mimetype,
+          is_active: true
+        };
+
+        await AcPanelImages.create(imageData);
+
+        // Reload record to get updated images
+        record = await AcPanel.findOne({
+          where: { session_id: sessionId },
+          include: [{
+            model: AcPanelImages,
+            as: 'images',
+            where: { is_active: true },
+            required: false
+          }]
+        });
       }
       
-      // Transform database record to API response format
+      // Transform and return the response
       return this.transformToApiResponse(record);
       
     } catch (error) {
@@ -64,7 +142,7 @@ class AcPanelService {
       power_cable_config: null,
       main_cb_config: null,
       has_free_cbs: data.has_free_cbs !== undefined ? data.has_free_cbs : null,
-      cb_fuse_data: [],
+      cb_fuse_data: data.cb_fuse_data || [],
       free_cb_spaces: data.free_cb_spaces || null
     };
     
@@ -76,11 +154,6 @@ class AcPanelService {
     // Process main CB configuration
     if (data.main_cb_config) {
       processed.main_cb_config = this.processMainCBConfig(data.main_cb_config);
-    }
-    
-    // Process CB/Fuse table data
-    if (data.cb_fuse_data) {
-      processed.cb_fuse_data = this.processCBFuseData(data.cb_fuse_data);
     }
     
     return processed;
@@ -194,6 +267,7 @@ class AcPanelService {
       has_free_cbs: data.has_free_cbs,
       cb_fuse_data: cbFuseData,
       free_cb_spaces: data.free_cb_spaces,
+      images: data.images || [],
       metadata: {
         created_at: data.created_at,
         updated_at: data.updated_at,
@@ -220,6 +294,7 @@ class AcPanelService {
         { id: 1, rating: null, connected_module: '' }
       ],
       free_cb_spaces: null,
+      images: [],
       metadata: {
         created_at: null,
         updated_at: null,
@@ -301,31 +376,25 @@ class AcPanelService {
    * Handle and format errors
    */
   static handleError(error) {
-    if (error.name === 'SequelizeValidationError') {
-      const validationErrors = error.errors.map(err => ({
-        field: err.path,
-        message: err.message,
-        value: err.value
-      }));
-      
+    console.error('AC Panel Service Error:', error);
+    
+    if (error.message.includes('must be an array')) {
       return {
         type: 'VALIDATION_ERROR',
-        message: 'Data validation failed',
-        errors: validationErrors
+        message: error.message
       };
     }
     
-    if (error.name === 'SequelizeForeignKeyConstraintError') {
+    if (error.message.includes('not found')) {
       return {
         type: 'FOREIGN_KEY_ERROR',
-        message: 'Invalid session_id reference',
-        error: error.message
+        message: error.message
       };
     }
     
     return {
       type: 'SERVICE_ERROR',
-      message: error.message || 'An unexpected error occurred'
+      message: error.message
     };
   }
 }

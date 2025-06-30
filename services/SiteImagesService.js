@@ -1,13 +1,14 @@
 const BaseImageService = require('./BaseImageService');
 const SiteImages = require('../models/SiteImages');
 const fs = require('fs').promises;
+const path = require('path');
 
 class SiteImagesService extends BaseImageService {
   constructor() {
+    // Pass model and upload directory path
     super(
-      'site_images', // Upload directory name
-      SiteImages,    // Model class
-      'site'        // File prefix for unique names
+      SiteImages,
+      path.join(__dirname, '../uploads/site_images')
     );
   }
 

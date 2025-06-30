@@ -1,6 +1,10 @@
 const express = require('express');
 const router = express.Router();
 const AcConnectionService = require('../services/AcConnectionService');
+const { upload } = require('../middleware/upload'); // Import the raw multer instance
+
+// Configure upload middleware for AC connection images
+const acConnectionUpload = upload.single('generator_photo');
 
 /**
  * Single endpoint for AC Connection Info
@@ -40,10 +44,11 @@ router.route('/:session_id')
       });
     }
   })
-  .put(async (req, res) => {
+  .put(acConnectionUpload, async (req, res) => {
     try {
       const { session_id } = req.params;
-      const updateData = req.body;
+      const updateData = req.body || {};
+      const imageFile = req.file;
       
       // Validate session_id parameter
       if (!session_id || session_id.trim() === '') {
@@ -56,18 +61,22 @@ router.route('/:session_id')
         });
       }
       
-      // Validate request body
-      if (!updateData || Object.keys(updateData).length === 0) {
+      // Validate that either file or body data is present
+      if (!imageFile && (!updateData || Object.keys(updateData).length === 0)) {
         return res.status(400).json({
           success: false,
           error: {
-            type: 'INVALID_BODY',
-            message: 'Request body cannot be empty'
+            type: 'INVALID_REQUEST',
+            message: 'Request must include either form data or an image file'
           }
         });
       }
       
-      const data = await AcConnectionService.getOrCreateBySessionId(session_id, updateData);
+      const data = await AcConnectionService.getOrCreateBySessionId(
+        session_id,
+        Object.keys(updateData).length > 0 ? updateData : null,
+        imageFile
+      );
       
       res.json({
         success: true,
