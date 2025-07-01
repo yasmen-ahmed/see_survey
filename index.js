@@ -44,6 +44,7 @@ app.use((req, res, next) => {
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 app.use('/uploads/mw_antennas', express.static(path.join(__dirname, 'uploads/mw_antennas')));
 app.use('/uploads/site_images', express.static(path.join(__dirname, 'uploads/site_images')));
+app.use('/uploads/transmission_mw', express.static(path.join(__dirname, 'uploads/transmission_mw')));
 
 // Routes
 const siteLocationRoutes = require('./routes/siteLocationRoutes');
