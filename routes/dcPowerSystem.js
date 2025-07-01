@@ -1,6 +1,42 @@
 const express = require('express');
 const router = express.Router();
+const multer = require('multer');
 const DCPowerSystemService = require('../services/DCPowerSystemService');
+const DCPowerSystemImageService = require('../services/DCPowerSystemImageService');
+const upload = multer({ storage: multer.memoryStorage() });
+
+// Helper function to generate dynamic upload fields
+const getDynamicUploadFields = (maxRectifiers = 20, maxBatteries = 10) => {
+  const fields = [
+    { name: 'overall_rectifier_cabinet_photo', maxCount: 1 }
+  ];
+
+  // Add rectifier module photo fields
+  for (let i = 1; i <= maxRectifiers; i++) {
+    fields.push({ name: `rectifier_module_photo_${i}`, maxCount: 1 });
+  }
+
+  fields.push(
+    { name: 'free_slots_rectifier_modules', maxCount: 1 },
+    { name: 'rectifier_cb_photos', maxCount: 1 },
+    { name: 'rectifier_free_cb_photo', maxCount: 1 }
+  );
+
+  // Add battery string photo fields
+  for (let i = 1; i <= maxBatteries; i++) {
+    fields.push({ name: `battery_string_photo_${i}`, maxCount: 1 });
+  }
+
+  fields.push(
+    { name: 'battery_model_photo', maxCount: 1 },
+    { name: 'battery_cb_photo', maxCount: 1 },
+    { name: 'rectifier_main_ac_cb_photo', maxCount: 1 },
+    { name: 'pdu_photos', maxCount: 1 },
+    { name: 'pdu_free_cb', maxCount: 1 }
+  );
+
+  return fields;
+};
 
 /**
  * GET /api/dc-power-system/:sessionId
@@ -11,10 +47,14 @@ router.get('/:sessionId', async (req, res) => {
     const { sessionId } = req.params;
     
     const result = await DCPowerSystemService.getOrCreateBySessionId(sessionId);
+    const images = await DCPowerSystemImageService.getImagesBySessionId(sessionId);
     
     res.status(200).json({
       success: true,
-      data: result,
+      data: {
+        ...result,
+        images
+      },
       message: 'DC Power System data retrieved successfully'
     });
     
@@ -38,10 +78,11 @@ router.get('/:sessionId', async (req, res) => {
  * PUT /api/dc-power-system/:sessionId
  * Update DC power system data by session ID
  */
-router.put('/:sessionId', async (req, res) => {
+router.put('/:sessionId', upload.fields(getDynamicUploadFields()), async (req, res) => {
   try {
     const { sessionId } = req.params;
     const updateData = req.body;
+    const files = req.files;
     
     // Validate that we have data to update
     if (!updateData || Object.keys(updateData).length === 0) {
@@ -53,12 +94,38 @@ router.put('/:sessionId', async (req, res) => {
         }
       });
     }
+
+    // Parse the form data
+    let parsedData = {};
+    if (updateData.dc_rectifiers) {
+      parsedData.dc_rectifiers = JSON.parse(updateData.dc_rectifiers);
+    }
+    if (updateData.batteries) {
+      parsedData.batteries = JSON.parse(updateData.batteries);
+    }
     
-    const result = await DCPowerSystemService.getOrCreateBySessionId(sessionId, updateData);
+    // Handle image uploads if any
+    if (files) {
+      for (const [category, fileArray] of Object.entries(files)) {
+        if (fileArray && fileArray.length > 0) {
+          await DCPowerSystemImageService.replaceImage({
+            file: fileArray[0],
+            session_id: sessionId,
+            image_category: category
+          });
+        }
+      }
+    }
+    
+    const result = await DCPowerSystemService.getOrCreateBySessionId(sessionId, parsedData);
+    const images = await DCPowerSystemImageService.getImagesBySessionId(sessionId);
     
     res.status(200).json({
       success: true,
-      data: result,
+      data: {
+        ...result,
+        images
+      },
       message: 'DC Power System data updated successfully'
     });
     
