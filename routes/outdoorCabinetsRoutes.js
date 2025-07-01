@@ -1,6 +1,8 @@
 const express = require('express');
 const router = express.Router();
 const OutdoorCabinetsService = require('../services/OutdoorCabinetsService');
+const OutdoorCabinetsImageService = require('../services/OutdoorCabinetsImageService');
+const { uploadAnyWithErrorHandling } = require('../middleware/upload');
 
 /**
  * Main endpoint for Outdoor Cabinets Info
@@ -307,6 +309,93 @@ router.get('/health/check', (req, res) => {
       'vendor_analytics'
     ]
   });
+});
+
+// Upload/replace cabinet image
+router.post('/:sessionId/cabinet/:cabinetNumber/image', uploadAnyWithErrorHandling, async (req, res) => {
+  try {
+    if (!req.files || req.files.length === 0) {
+      throw new Error('No image file provided');
+    }
+
+    const file = req.files[0]; // Get the first file
+    const image_category = req.body.image_category;
+    
+    if (!image_category) {
+      throw new Error('Image category is required');
+    }
+
+    const result = await OutdoorCabinetsImageService.replaceImage({
+      file,
+      session_id: req.params.sessionId,
+      cabinet_number: parseInt(req.params.cabinetNumber),
+      image_category,
+      description: req.body.description || null
+    });
+
+    res.json(result);
+  } catch (error) {
+    console.error('Error uploading cabinet image:', error);
+    res.status(error.status || 500).json({
+      success: false,
+      message: error.message || 'Internal server error'
+    });
+  }
+});
+
+// Delete cabinet images
+router.delete('/:sessionId/cabinet/:cabinetNumber/images', async (req, res) => {
+  try {
+    const result = await OutdoorCabinetsImageService.deleteImagesBySessionAndNumber(
+      req.params.sessionId,
+      parseInt(req.params.cabinetNumber)
+    );
+
+    res.json({
+      success: true,
+      message: 'Images deleted successfully',
+      count: result
+    });
+  } catch (error) {
+    console.error('Error deleting cabinet images:', error);
+    res.status(error.status || 500).json({
+      success: false,
+      message: error.message || 'Internal server error'
+    });
+  }
+});
+
+// Delete all images for a session
+router.delete('/:sessionId/images', async (req, res) => {
+  try {
+    const result = await OutdoorCabinetsImageService.deleteAllImagesBySessionId(req.params.sessionId);
+
+    res.json({
+      success: true,
+      message: 'All session images deleted successfully',
+      count: result
+    });
+  } catch (error) {
+    console.error('Error deleting session images:', error);
+    res.status(error.status || 500).json({
+      success: false,
+      message: error.message || 'Internal server error'
+    });
+  }
+});
+
+// Delete outdoor cabinets data and images
+router.delete('/:sessionId', async (req, res) => {
+  try {
+    const result = await OutdoorCabinetsService.deleteBySessionId(req.params.sessionId);
+    res.json(result);
+  } catch (error) {
+    console.error('Error deleting outdoor cabinets:', error);
+    res.status(error.status || 500).json({
+      success: false,
+      message: error.message || 'Internal server error'
+    });
+  }
 });
 
 module.exports = router; 

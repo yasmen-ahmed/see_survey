@@ -1,4 +1,5 @@
 const OutdoorCabinets = require('../models/OutdoorCabinets');
+const OutdoorCabinetsImageService = require('./OutdoorCabinetsImageService');
 
 class OutdoorCabinetsService {
   
@@ -212,7 +213,7 @@ class OutdoorCabinetsService {
   /**
    * Transform database record to API response format
    */
-  static transformToApiResponse(record) {
+  static async transformToApiResponse(record) {
     const data = record.toJSON();
     
     // Get the number of cabinets configured
@@ -252,39 +253,51 @@ class OutdoorCabinetsService {
           freeU: null
         });
       }
-    } else if (cabinets.length > numberOfCabinets) {
-      // Trim excess cabinets
-      cabinets = cabinets.slice(0, numberOfCabinets);
     }
-    
+
+    // Fetch images for each cabinet
+    const cabinetsWithImages = await Promise.all(cabinets.map(async (cabinet, index) => {
+      const images = await OutdoorCabinetsImageService.getImagesBySessionAndNumber(data.session_id, cabinet.id);
+      return {
+        ...cabinet,
+        images: images.map(img => ({
+          id: img.id,
+          category: img.image_category,
+          url: img.file_url
+        }))
+      };
+    }));
+
     return {
-      session_id: data.session_id,
-      numberOfCabinets: numberOfCabinets,
-      cabinets: cabinets,
-      metadata: {
-        created_at: data.created_at,
-        updated_at: data.updated_at,
-        total_cabinets_configured: numberOfCabinets
+      success: true,
+      data: {
+        session_id: data.session_id,
+        numberOfCabinets,
+        cabinets: cabinetsWithImages
       }
     };
   }
   
   /**
-   * Delete outdoor cabinets record by session ID
+   * Delete cabinet data and associated images
    */
   static async deleteBySessionId(sessionId) {
     try {
       await this.validateSession(sessionId);
       
-      const deletedCount = await OutdoorCabinets.destroy({
+      // Delete images first
+      await OutdoorCabinetsImageService.deleteAllImagesBySessionId(sessionId);
+      
+      // Delete cabinet data
+      const result = await OutdoorCabinets.destroy({
         where: { session_id: sessionId }
       });
       
       return {
-        deleted: deletedCount > 0,
-        deletedCount
+        success: true,
+        message: `Deleted outdoor cabinets data for session ${sessionId}`,
+        recordsDeleted: result
       };
-      
     } catch (error) {
       throw this.handleError(error);
     }
