@@ -48,7 +48,7 @@ router.route('/:session_id')
       let updateData = {};
       let imageResults = [];
       let hasImageUploadFailures = false;
-
+      
       // Validate session_id parameter
       if (!session_id || session_id.trim() === '') {
         return res.status(400).json({
@@ -59,7 +59,7 @@ router.route('/:session_id')
           }
         });
       }
-
+      
       // Handle different types of requests
       if (req.body.data) {
         // Form-data with JSON data field

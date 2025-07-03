@@ -1,7 +1,11 @@
 const express = require('express');
 const router = express.Router();
+const path = require('path');
 const NewFPFHs = require('../models/NewFPFHs');
+const NewFPFHsImages = require('../models/NewFPFHsImages');
 const NewRadioInstallations = require('../models/NewRadioInstallations');
+const { uploadAnyWithErrorHandling } = require('../middleware/upload');
+const fs = require('fs');
 
 // Simple data converter for database compatibility (no validation)
 const convertDataForDB = (data) => {
@@ -86,15 +90,24 @@ const getDefaultFPFHData = (sessionId, fpfhIndex) => {
   };
 };
 
-// Helper function to format FPFHs data with default empty strings
-const formatFPFHData = (fpfh, sessionId, fpfhIndex) => {
-  if (!fpfh) {
-    return getDefaultFPFHData(sessionId, fpfhIndex);
-  }
-
-  const data = fpfh.toJSON();
+// Helper function to get images for an FPFH
+const getFPFHImages = async (sessionId, fpfhIndex) => {
+  const images = await NewFPFHsImages.findAll({
+    where: { session_id: sessionId, fpfh_index: fpfhIndex }
+  });
   
-  // Convert null values to empty strings for string fields
+  return images.map(img => ({
+    id: img.id,
+    category: img.image_category,
+    file_url: img.image_path  // Return the relative path directly
+  }));
+};
+
+// Update formatFPFHData to include images
+const formatFPFHData = async (fpfh, sessionId, fpfhIndex) => {
+  const baseData = !fpfh ? getDefaultFPFHData(sessionId, fpfhIndex) : fpfh.toJSON();
+  
+  // Format existing fields as before
   const stringFields = [
     'fpfh_installation_type', 'fpfh_location', 'fpfh_tower_leg',
     'fpfh_dc_power_source', 'dc_distribution_source', 'earth_bus_bar_exists'
@@ -106,18 +119,21 @@ const formatFPFHData = (fpfh, sessionId, fpfhIndex) => {
   ];
 
   stringFields.forEach(field => {
-    if (data[field] === null || data[field] === undefined) {
-      data[field] = '';
+    if (baseData[field] === null || baseData[field] === undefined) {
+      baseData[field] = '';
     }
   });
 
   numericFields.forEach(field => {
-    if (data[field] === null || data[field] === undefined) {
-      data[field] = '';
+    if (baseData[field] === null || baseData[field] === undefined) {
+      baseData[field] = '';
     }
   });
 
-  return data;
+  // Add images
+  baseData.images = await getFPFHImages(sessionId, fpfhIndex);
+  
+  return baseData;
 };
 
 // GET /api/new-fpfh/:session_id
@@ -126,21 +142,19 @@ router.get('/:session_id', async (req, res) => {
   try {
     const { session_id } = req.params;
     
-    // Get the planned FPFH count
-    const newFPFHInstalled = await getNewFPFHInstalled(session_id);
-     
-    // Get existing FPFHs for this session
-    const existingFPFHs = await NewFPFHs.findAll({
-      where: { session_id },
-      order: [['fpfh_index', 'ASC']]
-    });
+    const [newFPFHInstalled, existingFPFHs] = await Promise.all([
+      getNewFPFHInstalled(session_id),
+      NewFPFHs.findAll({
+        where: { session_id },
+        order: [['fpfh_index', 'ASC']]
+      })
+    ]);
 
-    // Create array with the expected number of FPFHs (filling missing ones with empty data)
-    const formattedFPFHs = [];
-    for (let i = 1; i <= newFPFHInstalled; i++) {
-      const existingFPFH = existingFPFHs.find(fpfh => fpfh.fpfh_index === i);
-      formattedFPFHs.push(formatFPFHData(existingFPFH, session_id, i));
-    }
+    const formattedFPFHs = await Promise.all(
+      existingFPFHs.map(fpfh => 
+        formatFPFHData(fpfh, session_id, fpfh.fpfh_index)
+      )
+    );
 
     res.json({
       session_id,
@@ -165,13 +179,10 @@ router.get('/:session_id/:fpfh_index', async (req, res) => {
     }
 
     const fpfh = await NewFPFHs.findOne({
-      where: { 
-        session_id,
-        fpfh_index: index
-      }
+      where: { session_id, fpfh_index: index }
     });
 
-    const formattedData = formatFPFHData(fpfh, session_id, index);
+    const formattedData = await formatFPFHData(fpfh, session_id, index);
     res.json(formattedData);
   } catch (error) {
     res.status(500).json({ error: error.message });
@@ -205,7 +216,7 @@ router.post('/:session_id/:fpfh_index', async (req, res) => {
       await fpfh.update(convertedData);
       res.json({
         message: `FPFH ${index} updated successfully`,
-        data: formatFPFHData(fpfh, session_id, index)
+        data: await formatFPFHData(fpfh, session_id, index)
       });
     } else {
       // Create new FPFH
@@ -216,7 +227,7 @@ router.post('/:session_id/:fpfh_index', async (req, res) => {
       });
       res.status(201).json({
         message: `FPFH ${index} created successfully`,
-        data: formatFPFHData(fpfh, session_id, index)
+        data: await formatFPFHData(fpfh, session_id, index)
       });
     }
   } catch (error) {
@@ -225,10 +236,26 @@ router.post('/:session_id/:fpfh_index', async (req, res) => {
 });
 
 // PUT /api/new-fpfh/:session_id (bulk update/create FPFHs array)
-router.put('/:session_id', async (req, res) => {
+router.put('/:session_id', uploadAnyWithErrorHandling, async (req, res) => {
   try {
     const { session_id } = req.params;
-    const fpfhsArray = req.body.fpfhs || [];
+    let updateData = req.body;
+    
+    // Handle multipart/form-data format (when uploading files)
+    if (req.files && req.files.length > 0) {
+      // Parse data from form data if it exists
+      if (updateData.data && typeof updateData.data === 'string') {
+        try {
+          updateData = JSON.parse(updateData.data);
+        } catch (error) {
+          return res.status(400).json({
+            error: 'Invalid JSON format in data field'
+          });
+        }
+      }
+    }
+
+    const fpfhsArray = updateData.fpfhs || [];
 
     if (!Array.isArray(fpfhsArray)) {
       return res.status(400).json({ error: 'Request body must contain an fpfhs array' });
@@ -268,7 +295,7 @@ router.put('/:session_id', async (req, res) => {
         results.push({
           fpfh_index: fpfhIndex,
           status: 'success',
-          data: formatFPFHData(fpfh, session_id, fpfhIndex)
+          data: await formatFPFHData(fpfh, session_id, fpfhIndex)
         });
       } catch (error) {
         results.push({
@@ -278,25 +305,143 @@ router.put('/:session_id', async (req, res) => {
         });
       }
     }
+    
+    // Handle image uploads if present
+    const imageResults = [];
+    let hasImageUploadFailures = false;
+    
+    if (req.files && req.files.length > 0) {
+      for (const file of req.files) {
+        try {
+          const field = file.fieldname;
+          let fpfh_index;
+          
+          // Handle FPFH image field naming
+          console.log('Processing field:', field);
+          
+          // Remove any spaces and normalize the field name
+          const normalizedField = field.replace(/\s+/g, '');
+          console.log('Normalized field:', normalizedField);
+          
+          const fpfhMatch = normalizedField.match(/new_fpfh_(\d+)_/);
+          console.log('Regex match result:', fpfhMatch);
+          
+          if (fpfhMatch) {
+            fpfh_index = parseInt(fpfhMatch[1], 10);
+            console.log('Extracted fpfh_index:', fpfh_index);
+          } else {
+            console.log('Field did not match expected pattern');
+            throw new Error(`Invalid field name format: ${field}. Expected new_fpfh_X_* format (received: ${normalizedField})`);
+          }
+          
+          // Get the planned FPFH count
+          const newFPFHInstalled = await getNewFPFHInstalled(session_id);
+          
+          if (!fpfh_index || fpfh_index > newFPFHInstalled) {
+            throw new Error(`Invalid FPFH index ${fpfh_index} in field ${field}. Must be between 1 and ${newFPFHInstalled}`);
+          }
 
-    res.json({
+          // Check for existing image with the same category
+          const existingImage = await NewFPFHsImages.findOne({
+            where: {
+              session_id,
+              fpfh_index,
+              image_category: normalizedField
+            }
+          });
+
+          if (existingImage) {
+            // Delete the old image file if it exists
+            const oldImagePath = path.join(__dirname, '..', existingImage.image_path);
+            if (fs.existsSync(oldImagePath)) {
+              fs.unlinkSync(oldImagePath);
+            }
+            // Delete the old image record
+            await existingImage.destroy();
+          }
+
+          // Create a unique filename that includes the category to prevent collisions
+          const fileExt = path.extname(file.originalname);
+          const uniqueFilename = `new_fpfh_${fpfh_index}_${normalizedField}_${Date.now()}${fileExt}`;
+          const relativePath = `uploads/new_fpfhs/${uniqueFilename}`;
+          const fullPath = path.join(__dirname, '..', relativePath);
+          
+          // Ensure the directory exists
+          fs.mkdirSync(path.dirname(fullPath), { recursive: true });
+          
+          // Copy the uploaded file to the final location
+          fs.copyFileSync(file.path, fullPath);
+          
+          // Delete the temporary upload file
+          fs.unlinkSync(file.path);
+          
+          const image = await NewFPFHsImages.create({
+            session_id,
+            fpfh_index,
+            image_category: normalizedField,
+            image_path: relativePath
+          });
+          
+          imageResults.push({ field, success: true, data: image });
+        } catch (err) {
+          hasImageUploadFailures = true;
+          imageResults.push({ field: file.fieldname, success: false, error: err.message });
+        }
+      }
+    }
+
+    const successCount = imageResults.filter(r => r.success).length;
+    const failCount = imageResults.filter(r => !r.success).length;
+
+    const response = {
       message: `Processed ${fpfhsArray.length} FPFHs for session ${session_id}`,
       results
-    });
+    };
+    
+    if (imageResults.length > 0) {
+      response.images_processed = {
+        total: imageResults.length,
+        successful: successCount,
+        failed: failCount,
+        details: imageResults
+      };
+      
+      if (hasImageUploadFailures) {
+        response.message += ` but ${failCount} image upload(s) failed`;
+      } else {
+        response.message += ` and ${successCount} image(s) processed`;
+      }
+    }
+
+    res.json(response);
   } catch (error) {
     res.status(400).json({ error: error.message });
   }
 });
 
 // PUT /api/new-fpfh/:session_id/:fpfh_index
-router.put('/:session_id/:fpfh_index', async (req, res) => {
+router.put('/:session_id/:fpfh_index', uploadAnyWithErrorHandling, async (req, res) => {
   try {
     const { session_id, fpfh_index } = req.params;
-    const fpfhData = req.body;
+    let fpfhData = req.body;
     const index = parseInt(fpfh_index);
 
     if (isNaN(index) || index < 1) {
       return res.status(400).json({ error: 'fpfh_index must be a positive integer' });
+    }
+
+    // Handle multipart/form-data format (when uploading files)
+    if (req.files && req.files.length > 0) {
+      // Parse data from form data if it exists
+      if (fpfhData.data && typeof fpfhData.data === 'string') {
+        try {
+          fpfhData = JSON.parse(fpfhData.data);
+        } catch (error) {
+          return res.status(400).json({
+            error: 'Invalid JSON format in data field'
+          });
+        }
+      }
     }
 
     // Convert data for database compatibility
@@ -321,10 +466,55 @@ router.put('/:session_id/:fpfh_index', async (req, res) => {
       await fpfh.update(convertedData);
     }
 
-    res.json({
+    // Handle image uploads if present
+    const imageResults = [];
+    let hasImageUploadFailures = false;
+    
+    if (req.files && req.files.length > 0) {
+      for (const file of req.files) {
+        try {
+          const field = file.fieldname;
+          
+          // Create image record
+          const image = await NewFPFHsImages.create({
+            session_id,
+            fpfh_index: index,
+            image_category: field,
+            image_path: file.path || file.filename
+          });
+          
+          imageResults.push({ field, success: true, data: image });
+        } catch (err) {
+          hasImageUploadFailures = true;
+          imageResults.push({ field: file.fieldname, success: false, error: err.message });
+        }
+      }
+    }
+
+    const successCount = imageResults.filter(r => r.success).length;
+    const failCount = imageResults.filter(r => !r.success).length;
+
+    const response = {
       message: `FPFH ${index} updated successfully`,
-      data: formatFPFHData(fpfh, session_id, index)
-    });
+      data: await formatFPFHData(fpfh, session_id, index)
+    };
+    
+    if (imageResults.length > 0) {
+      response.images_processed = {
+        total: imageResults.length,
+        successful: successCount,
+        failed: failCount,
+        details: imageResults
+      };
+      
+      if (hasImageUploadFailures) {
+        response.message = `FPFH ${index} updated but ${failCount} image upload(s) failed`;
+      } else {
+        response.message += ` and ${successCount} image(s) processed`;
+      }
+    }
+
+    res.json(response);
   } catch (error) {
     res.status(400).json({ error: error.message });
   }
@@ -365,7 +555,7 @@ router.patch('/:session_id/:fpfh_index', async (req, res) => {
 
     res.json({
       message: `FPFH ${index} partially updated successfully`,
-      data: formatFPFHData(fpfh, session_id, index)
+      data: await formatFPFHData(fpfh, session_id, index)
     });
   } catch (error) {
     res.status(400).json({ error: error.message });

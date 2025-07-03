@@ -1,8 +1,53 @@
 const multer = require('multer');
 const path = require('path');
+const fs = require('fs');
 
-// Configure multer for memory storage (we'll handle file saving in the service)
-const storage = multer.memoryStorage();
+// Helper function to determine upload directory and filename prefix based on field name
+const getUploadConfig = (fieldname) => {
+  // Remove any spaces and normalize the field name
+  const normalizedField = fieldname.replace(/\s+/g, '');
+  
+  if (normalizedField.startsWith('new_fpfh_')) {
+    return {
+      directory: 'new_fpfhs',
+      prefix: 'new_fpfh_'
+    };
+  } else if (normalizedField.startsWith('new_radio_unit_')) {
+    return {
+      directory: 'new_radio_units',
+      prefix: 'new_radio_unit_'
+    };
+  } else if (normalizedField.startsWith('new_antenna_')) {
+    return {
+      directory: 'new_antennas',
+      prefix: 'new_antenna_'
+    };
+  }
+  
+  // Default case
+  return {
+    directory: 'general',
+    prefix: 'image_'
+  };
+};
+
+// Configure multer for disk storage
+const storage = multer.diskStorage({
+  destination: function (req, file, cb) {
+    const { directory } = getUploadConfig(file.fieldname);
+    const uploadDir = path.join(__dirname, '../uploads', directory);
+    
+    // Create directory if it doesn't exist
+    fs.mkdirSync(uploadDir, { recursive: true });
+    
+    cb(null, uploadDir);
+  },
+  filename: function (req, file, cb) {
+    const { prefix } = getUploadConfig(file.fieldname);
+    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
+    cb(null, prefix + uniqueSuffix + path.extname(file.originalname));
+  }
+});
 
 // File filter function
 const fileFilter = (req, file, cb) => {

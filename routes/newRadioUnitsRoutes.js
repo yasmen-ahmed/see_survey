@@ -1,7 +1,11 @@
 const express = require('express');
 const router = express.Router();
+const path = require('path');
+const fs = require('fs');
 const NewRadioUnits = require('../models/NewRadioUnits');
+const NewRadioUnitsImages = require('../models/NewRadioUnitsImages');
 const NewRadioInstallations = require('../models/NewRadioInstallations');
+const { uploadAnyWithErrorHandling } = require('../middleware/upload');
 
 // Simple data converter for database compatibility (no validation)
 const convertDataForDB = (data) => {
@@ -103,15 +107,24 @@ const getDefaultRadioUnitData = (sessionId, radioUnitIndex) => {
   };
 };
 
-// Helper function to format radio unit data with default empty strings
-const formatRadioUnitData = (radioUnit, sessionId, radioUnitIndex) => {
-  if (!radioUnit) {
-    return getDefaultRadioUnitData(sessionId, radioUnitIndex);
-  }
-
-  const data = radioUnit.toJSON();
+// Helper function to get images for a Radio Unit
+const getRadioUnitImages = async (sessionId, radioUnitIndex) => {
+  const images = await NewRadioUnitsImages.findAll({
+    where: { session_id: sessionId, radio_unit_index: radioUnitIndex }
+  });
   
-  // Convert null values to empty strings for string fields
+  return images.map(img => ({
+    id: img.id,
+    category: img.image_category,
+    file_url: img.image_path  // Return the relative path directly
+  }));
+};
+
+// Update formatRadioUnitData to include images
+const formatRadioUnitData = async (radioUnit, sessionId, radioUnitIndex) => {
+  const baseData = !radioUnit ? getDefaultRadioUnitData(sessionId, radioUnitIndex) : radioUnit.toJSON();
+  
+  // Format existing fields as before
   const stringFields = [
     'new_radio_unit_sector', 'connected_to_antenna', 'new_radio_unit_model',
     'radio_unit_location', 'tower_leg_section', 'side_arm_type',
@@ -126,32 +139,32 @@ const formatRadioUnitData = (radioUnit, sessionId, radioUnitIndex) => {
   ];
 
   stringFields.forEach(field => {
-    if (data[field] === null || data[field] === undefined) {
-      data[field] = '';
+    if (baseData[field] === null || baseData[field] === undefined) {
+      baseData[field] = '';
     }
   });
 
   numericFields.forEach(field => {
-    if (data[field] === null || data[field] === undefined) {
-      data[field] = '';
+    if (baseData[field] === null || baseData[field] === undefined) {
+      baseData[field] = '';
     }
   });
 
-  // Ensure connected_antenna_technology is always an array
-  if (!Array.isArray(data.connected_antenna_technology)) {
-    data.connected_antenna_technology = [];
+  if (!Array.isArray(baseData.connected_antenna_technology)) {
+    baseData.connected_antenna_technology = [];
   }
 
-  return data;
+  // Add images
+  baseData.images = await getRadioUnitImages(sessionId, radioUnitIndex);
+  
+  return baseData;
 };
 
-// GET /api/new-radio-units/:session_id
-// Returns array based on new_radio_units_planned count with empty objects for missing ones
+// Update GET routes to include images
 router.get('/:session_id', async (req, res) => {
   try {
     const { session_id } = req.params;
     
-    // Get the planned radio unit count and existing radio units
     const [newRadioUnitsPlanned, existingRadioUnits] = await Promise.all([
       getNewRadioUnitsPlanned(session_id),
       NewRadioUnits.findAll({
@@ -160,12 +173,11 @@ router.get('/:session_id', async (req, res) => {
       })
     ]);
 
-    // Create array with the expected number of radio units (filling missing ones with empty data)
-    const formattedRadioUnits = [];
-    for (let i = 1; i <= newRadioUnitsPlanned; i++) {
-      const existingRadioUnit = existingRadioUnits.find(unit => unit.radio_unit_index === i);
-      formattedRadioUnits.push(formatRadioUnitData(existingRadioUnit, session_id, i));
-    }
+    const formattedRadioUnits = await Promise.all(
+      existingRadioUnits.map(unit => 
+        formatRadioUnitData(unit, session_id, unit.radio_unit_index)
+      )
+    );
 
     res.json({
       session_id,
@@ -178,8 +190,7 @@ router.get('/:session_id', async (req, res) => {
   }
 });
 
-// GET /api/new-radio-units/:session_id/:radio_unit_index
-// Returns specific radio unit or default empty data if not exists
+// Update single radio unit GET route
 router.get('/:session_id/:radio_unit_index', async (req, res) => {
   try {
     const { session_id, radio_unit_index } = req.params;
@@ -190,13 +201,10 @@ router.get('/:session_id/:radio_unit_index', async (req, res) => {
     }
 
     const radioUnit = await NewRadioUnits.findOne({
-      where: { 
-        session_id,
-        radio_unit_index: index
-      }
+      where: { session_id, radio_unit_index: index }
     });
 
-    const formattedData = formatRadioUnitData(radioUnit, session_id, index);
+    const formattedData = await formatRadioUnitData(radioUnit, session_id, index);
     res.json(formattedData);
   } catch (error) {
     res.status(500).json({ error: error.message });
@@ -230,7 +238,7 @@ router.post('/:session_id/:radio_unit_index', async (req, res) => {
       await radioUnit.update(convertedData);
       res.json({
         message: `Radio unit ${index} updated successfully`,
-        data: formatRadioUnitData(radioUnit, session_id, index)
+        data: await formatRadioUnitData(radioUnit, session_id, index)
       });
     } else {
       // Create new radio unit
@@ -241,7 +249,7 @@ router.post('/:session_id/:radio_unit_index', async (req, res) => {
       });
       res.status(201).json({
         message: `Radio unit ${index} created successfully`,
-        data: formatRadioUnitData(radioUnit, session_id, index)
+        data: await formatRadioUnitData(radioUnit, session_id, index)
       });
     }
   } catch (error) {
@@ -249,11 +257,27 @@ router.post('/:session_id/:radio_unit_index', async (req, res) => {
   }
 });
 
-// PUT /api/new-radio-units/:session_id (bulk update/create radio units array)
-router.put('/:session_id', async (req, res) => {
+// PUT /api/new-radio-units/:session_id
+router.put('/:session_id', uploadAnyWithErrorHandling, async (req, res) => {
   try {
     const { session_id } = req.params;
-    const radioUnitsArray = req.body.radio_units || [];
+    let updateData = req.body;
+    
+    // Handle multipart/form-data format (when uploading files)
+    if (req.files && req.files.length > 0) {
+      // Parse data from form data if it exists
+      if (updateData.data && typeof updateData.data === 'string') {
+        try {
+          updateData = JSON.parse(updateData.data);
+        } catch (error) {
+          return res.status(400).json({
+            error: 'Invalid JSON format in data field'
+          });
+        }
+      }
+    }
+
+    const radioUnitsArray = updateData.radio_units || [];
 
     if (!Array.isArray(radioUnitsArray)) {
       return res.status(400).json({ error: 'Request body must contain a radio_units array' });
@@ -293,7 +317,7 @@ router.put('/:session_id', async (req, res) => {
         results.push({
           radio_unit_index: radioUnitIndex,
           status: 'success',
-          data: formatRadioUnitData(radioUnit, session_id, radioUnitIndex)
+          data: await formatRadioUnitData(radioUnit, session_id, radioUnitIndex)
         });
       } catch (error) {
         results.push({
@@ -303,25 +327,150 @@ router.put('/:session_id', async (req, res) => {
         });
       }
     }
+    
+    // Handle image uploads if present
+    const imageResults = [];
+    let hasImageUploadFailures = false;
+    
+    if (req.files && req.files.length > 0) {
+      for (const file of req.files) {
+        try {
+          const field = file.fieldname;
+          let radio_unit_index = 1; // Default to 1 if no index found
+          let category = field;
 
-    res.json({
+          // Try to extract radio unit index if present
+          const match = field.match(/new_radio_(\d+)_/);
+          if (match) {
+            radio_unit_index = parseInt(match[1], 10);
+            category = field.replace(`new_radio_${radio_unit_index}_`, '');
+          }
+
+          // Check for existing image with the same category and radio unit index
+          const existingImage = await NewRadioUnitsImages.findOne({
+            where: {
+              session_id,
+              radio_unit_index,
+              image_category: category
+            }
+          });
+
+          // If an image with the same category exists, delete it
+          if (existingImage) {
+            try {
+              // Delete the old file from disk
+              const oldImagePath = path.join(__dirname, '..', existingImage.image_path);
+              if (fs.existsSync(oldImagePath)) {
+                fs.unlinkSync(oldImagePath);
+              }
+              // Delete the record from database
+              await existingImage.destroy();
+              console.log(`Deleted existing image: ${existingImage.image_path}`);
+            } catch (deleteError) {
+              console.error('Error deleting existing image:', deleteError);
+              // Continue with the upload even if delete fails
+            }
+          }
+
+          // Create unique filename that includes radio unit index and category
+          const fileExt = path.extname(file.originalname);
+          const uniqueFilename = `new_radio_${radio_unit_index}_${category}_${Date.now()}${fileExt}`;
+          const relativePath = `uploads/new_radio_units/${uniqueFilename}`;
+          const fullPath = path.join(__dirname, '..', relativePath);
+
+          // Ensure directory exists
+          fs.mkdirSync(path.dirname(fullPath), { recursive: true });
+
+          // Save the new file
+          fs.copyFileSync(file.path, fullPath);
+          fs.unlinkSync(file.path); // Clean up temp file
+
+          // Create new image record
+          const image = await NewRadioUnitsImages.create({
+            session_id,
+            radio_unit_index,
+            image_category: category,
+            image_path: relativePath
+          });
+
+          imageResults.push({
+            field,
+            radio_unit_index,
+            category,
+            success: true,
+            data: image,
+            replaced: !!existingImage // Indicate if this was a replacement
+          });
+
+        } catch (err) {
+          hasImageUploadFailures = true;
+          imageResults.push({
+            field: file.fieldname,
+            success: false,
+            error: err.message
+          });
+        }
+      }
+    }
+
+    const successCount = imageResults.filter(r => r.success).length;
+    const failCount = imageResults.filter(r => !r.success).length;
+    const replacedCount = imageResults.filter(r => r.success && r.replaced).length;
+
+    const response = {
       message: `Processed ${radioUnitsArray.length} radio units for session ${session_id}`,
       results
-    });
+    };
+    
+    if (imageResults.length > 0) {
+      response.images_processed = {
+        total: imageResults.length,
+        successful: successCount,
+        failed: failCount,
+        replaced: replacedCount,
+        details: imageResults
+      };
+      
+      let imageMessage = ` and ${successCount} image(s) processed`;
+      if (replacedCount > 0) {
+        imageMessage += ` (${replacedCount} replaced)`;
+      }
+      if (failCount > 0) {
+        imageMessage += ` but ${failCount} image upload(s) failed`;
+      }
+      response.message += imageMessage;
+    }
+
+    res.json(response);
   } catch (error) {
+    console.error('Error in radio units update:', error);
     res.status(400).json({ error: error.message });
   }
 });
 
 // PUT /api/new-radio-units/:session_id/:radio_unit_index
-router.put('/:session_id/:radio_unit_index', async (req, res) => {
+router.put('/:session_id/:radio_unit_index', uploadAnyWithErrorHandling, async (req, res) => {
   try {
     const { session_id, radio_unit_index } = req.params;
-    const radioUnitData = req.body;
+    let radioUnitData = req.body;
     const index = parseInt(radio_unit_index);
 
     if (isNaN(index) || index < 1) {
       return res.status(400).json({ error: 'radio_unit_index must be a positive integer' });
+    }
+
+    // Handle multipart/form-data format (when uploading files)
+    if (req.files && req.files.length > 0) {
+      // Parse data from form data if it exists
+      if (radioUnitData.data && typeof radioUnitData.data === 'string') {
+        try {
+          radioUnitData = JSON.parse(radioUnitData.data);
+        } catch (error) {
+          return res.status(400).json({
+            error: 'Invalid JSON format in data field'
+          });
+        }
+      }
     }
 
     // Convert data for database compatibility
@@ -346,10 +495,55 @@ router.put('/:session_id/:radio_unit_index', async (req, res) => {
       await radioUnit.update(convertedData);
     }
 
-    res.json({
+    // Handle image uploads if present
+    const imageResults = [];
+    let hasImageUploadFailures = false;
+    
+    if (req.files && req.files.length > 0) {
+      for (const file of req.files) {
+        try {
+          const field = file.fieldname;
+          
+          // Create image record
+          const image = await NewRadioUnitsImages.create({
+            session_id,
+            radio_unit_index: index,
+            image_category: field,
+            image_path: file.path || file.filename
+          });
+          
+          imageResults.push({ field, success: true, data: image });
+        } catch (err) {
+          hasImageUploadFailures = true;
+          imageResults.push({ field: file.fieldname, success: false, error: err.message });
+        }
+      }
+    }
+
+    const successCount = imageResults.filter(r => r.success).length;
+    const failCount = imageResults.filter(r => !r.success).length;
+
+    const response = {
       message: `Radio unit ${index} updated successfully`,
-      data: formatRadioUnitData(radioUnit, session_id, index)
-    });
+      data: await formatRadioUnitData(radioUnit, session_id, index)
+    };
+    
+    if (imageResults.length > 0) {
+      response.images_processed = {
+        total: imageResults.length,
+        successful: successCount,
+        failed: failCount,
+        details: imageResults
+      };
+      
+      if (hasImageUploadFailures) {
+        response.message = `Radio unit ${index} updated but ${failCount} image upload(s) failed`;
+      } else {
+        response.message += ` and ${successCount} image(s) processed`;
+      }
+    }
+
+    res.json(response);
   } catch (error) {
     res.status(400).json({ error: error.message });
   }
@@ -390,7 +584,7 @@ router.patch('/:session_id/:radio_unit_index', async (req, res) => {
 
     res.json({
       message: `Radio unit ${index} partially updated successfully`,
-      data: formatRadioUnitData(radioUnit, session_id, index)
+      data: await formatRadioUnitData(radioUnit, session_id, index)
     });
   } catch (error) {
     res.status(400).json({ error: error.message });
@@ -475,3 +669,4 @@ router.get('/:session_id/config', async (req, res) => {
 });
 
 module.exports = router; 
+
