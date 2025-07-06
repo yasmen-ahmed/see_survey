@@ -94,7 +94,7 @@ router.put('/:sessionId', upload.fields(getDynamicUploadFields()), async (req, r
         }
       });
     }
-
+    
     // Parse the form data
     let parsedData = {};
     if (updateData.dc_rectifiers) {

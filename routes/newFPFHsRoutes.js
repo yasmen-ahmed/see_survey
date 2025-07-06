@@ -145,8 +145,8 @@ router.get('/:session_id', async (req, res) => {
     const [newFPFHInstalled, existingFPFHs] = await Promise.all([
       getNewFPFHInstalled(session_id),
       NewFPFHs.findAll({
-        where: { session_id },
-        order: [['fpfh_index', 'ASC']]
+      where: { session_id },
+      order: [['fpfh_index', 'ASC']]
       })
     ]);
 
@@ -305,7 +305,7 @@ router.put('/:session_id', uploadAnyWithErrorHandling, async (req, res) => {
         });
       }
     }
-    
+
     // Handle image uploads if present
     const imageResults = [];
     let hasImageUploadFailures = false;
