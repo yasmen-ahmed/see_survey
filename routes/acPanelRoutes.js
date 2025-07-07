@@ -1,20 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const AcPanelService = require('../services/AcPanelService');
-const { upload } = require('../middleware/upload');
-
-// Configure upload middleware for AC panel images
-const acPanelUpload = upload.fields([
-  { name: 'ac_panel_photo_overview', maxCount: 1 },
-  { name: 'ac_panel_photo_closed', maxCount: 1 },
-  { name: 'ac_panel_photo_opened', maxCount: 1 },
-  { name: 'ac_panel_cbs_photo', maxCount: 1 },
-  { name: 'ac_panel_free_cb', maxCount: 1 },
-  { name: 'proposed_ac_cb_photo', maxCount: 1 },
-  { name: 'ac_cable_route_photo_1', maxCount: 1 },
-  { name: 'ac_cable_route_photo_2', maxCount: 1 },
-  { name: 'ac_cable_route_photo_3', maxCount: 1 }
-]);
+const { uploadAnyWithErrorHandling } = require('../middleware/upload');
 
 /**
  * Main endpoint for AC Panel Info
@@ -54,8 +41,14 @@ router.route('/:session_id')
       });
     }
   })
-  .put(acPanelUpload, async (req, res) => {
+  .put(uploadAnyWithErrorHandling, async (req, res) => {
     try {
+      console.log('Processing AC Panel PUT request:', {
+        sessionId: req.params.session_id,
+        files: req.files ? req.files.map(f => ({ fieldname: f.fieldname, originalname: f.originalname })) : 'No files',
+        body: req.body
+      });
+
       const { session_id } = req.params;
       let updateData = {};
       
@@ -70,25 +63,34 @@ router.route('/:session_id')
         });
       }
 
-      // Process form data if present
-      if (req.body) {
+      // Handle form-data with JSON
+      if (req.body.data) {
         try {
-          // Handle power_cable_config
+          updateData = JSON.parse(req.body.data);
+        } catch (error) {
+          return res.status(400).json({
+            success: false,
+            error: {
+              type: 'INVALID_JSON',
+              message: 'Invalid JSON in data field'
+            }
+          });
+        }
+      } else {
+        // Handle individual form fields
+        try {
           if (req.body.power_cable_config) {
             updateData.power_cable_config = JSON.parse(req.body.power_cable_config);
           }
           
-          // Handle main_cb_config
           if (req.body.main_cb_config) {
             updateData.main_cb_config = JSON.parse(req.body.main_cb_config);
           }
           
-          // Handle cb_fuse_data
           if (req.body.cb_fuse_data) {
             updateData.cb_fuse_data = JSON.parse(req.body.cb_fuse_data);
           }
           
-          // Handle other fields
           if (req.body.has_free_cbs) {
             updateData.has_free_cbs = req.body.has_free_cbs === 'true';
           }
@@ -96,19 +98,19 @@ router.route('/:session_id')
           if (req.body.free_cb_spaces) {
             updateData.free_cb_spaces = parseInt(req.body.free_cb_spaces);
           }
-        } catch (e) {
+        } catch (error) {
           return res.status(400).json({
             success: false,
             error: {
-              type: 'INVALID_REQUEST',
-              message: 'Invalid JSON in form data'
+              type: 'INVALID_JSON',
+              message: 'Invalid JSON in form fields'
             }
           });
         }
       }
 
       // Get all uploaded files
-      const imageFiles = req.files ? Object.values(req.files).map(f => f[0]) : [];
+      const imageFiles = req.files || [];
       
       // Validate that either file or body data is present
       if (imageFiles.length === 0 && Object.keys(updateData).length === 0) {
@@ -123,7 +125,7 @@ router.route('/:session_id')
 
       // Process each image file
       for (const file of imageFiles) {
-        const data = await AcPanelService.getOrCreateBySessionId(
+        await AcPanelService.getOrCreateBySessionId(
           session_id,
           updateData,
           file
@@ -152,25 +154,12 @@ router.route('/:session_id')
     } catch (error) {
       console.error('AC Panel PUT Error:', error);
       
-      let statusCode = 500;
-      let errorType = 'SERVER_ERROR';
-      let errorMessage = 'An unexpected error occurred';
-
-      if (error.type === 'VALIDATION_ERROR') {
-        statusCode = 400;
-        errorType = 'VALIDATION_ERROR';
-        errorMessage = error.message;
-      } else if (error.type === 'FOREIGN_KEY_ERROR') {
-        statusCode = 400;
-        errorType = 'FOREIGN_KEY_ERROR';
-        errorMessage = error.message;
-      }
-      
-      res.status(statusCode).json({
+      res.status(500).json({
         success: false,
         error: {
-          type: errorType,
-          message: errorMessage
+          type: error.type || 'SERVER_ERROR',
+          message: error.message,
+          details: error.stack
         }
       });
     }

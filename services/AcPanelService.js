@@ -1,6 +1,6 @@
 const { AcPanel, AcPanelImages } = require('../models/associations');
 const Survey = require('../models/Survey');
-const fs = require('fs').promises;
+const fs = require('fs');
 const path = require('path');
 
 class AcPanelService {
@@ -63,56 +63,96 @@ class AcPanelService {
 
       // Handle image upload if provided
       if (imageFile) {
-        const imageCategory = imageFile.fieldname;
-        const timestamp = Date.now();
-        const filename = `ac_panel_${timestamp}_${path.basename(imageFile.originalname).replace(/[^a-zA-Z0-9.-]/g, '_')}`;
-        
-        // Create uploads directory if it doesn't exist
-        const uploadDir = path.join(process.cwd(), 'uploads', 'ac_panel');
-        await fs.mkdir(uploadDir, { recursive: true });
-        
-        // Find and deactivate existing image of the same category
-        await AcPanelImages.update(
-          { is_active: false },
-          { 
-            where: { 
+        try {
+          console.log('Processing image file:', {
+            fieldname: imageFile.fieldname,
+            originalname: imageFile.originalname,
+            path: imageFile.path
+          });
+
+          const imageCategory = imageFile.fieldname;
+          const timestamp = Date.now();
+          const filename = `ac_panel_${timestamp}_${imageFile.originalname.replace(/[^a-zA-Z0-9.-]/g, '_')}`;
+          
+          // Create uploads directory if it doesn't exist
+          const uploadDir = path.join(process.cwd(), 'uploads', 'ac_panel');
+          if (!fs.existsSync(uploadDir)) {
+            fs.mkdirSync(uploadDir, { recursive: true });
+          }
+
+          // Find existing image of the same category
+          const existingImage = await AcPanelImages.findOne({
+            where: {
               session_id: sessionId,
               table_id: record.id,
               image_category: imageCategory,
               is_active: true
             }
+          });
+
+          if (existingImage) {
+            console.log('Found existing image to replace:', existingImage.file_path);
+            
+            // Deactivate old image
+            await existingImage.update({ is_active: false });
+            
+            // Delete old file if it exists
+            try {
+              if (fs.existsSync(existingImage.file_path)) {
+                fs.unlinkSync(existingImage.file_path);
+                console.log('Successfully deleted old image file');
+              }
+            } catch (err) {
+              console.warn('Failed to delete old image file:', err);
+            }
           }
-        );
-        
-        // Save file to disk
-        const filePath = path.join(uploadDir, filename);
-        await fs.writeFile(filePath, imageFile.buffer);
-        
-        const imageData = {
-          session_id: sessionId,
-          table_id: record.id,
-          image_category: imageCategory,
-          original_filename: imageFile.originalname,
-          stored_filename: filename,
-          file_path: filePath,
-          file_url: `/uploads/ac_panel/${filename}`,
-          file_size: imageFile.size,
-          mime_type: imageFile.mimetype,
-          is_active: true
-        };
 
-        await AcPanelImages.create(imageData);
+          // Move file from temp location to final location
+          const finalPath = path.join(uploadDir, filename);
+          console.log('Moving file from', imageFile.path, 'to', finalPath);
+          
+          fs.copyFileSync(imageFile.path, finalPath);
+          console.log('Successfully copied file to final location');
+          
+          // Clean up temp file
+          try {
+            fs.unlinkSync(imageFile.path);
+            console.log('Successfully cleaned up temp file');
+          } catch (err) {
+            console.warn('Failed to cleanup temp file:', err);
+          }
+          
+          const imageData = {
+            session_id: sessionId,
+            table_id: record.id,
+            image_category: imageCategory,
+            original_filename: imageFile.originalname,
+            stored_filename: filename,
+            file_path: finalPath,
+            file_url: `/uploads/ac_panel/${filename}`,
+            file_size: imageFile.size,
+            mime_type: imageFile.mimetype,
+            is_active: true
+          };
 
-        // Reload record to get updated images
-        record = await AcPanel.findOne({
-          where: { session_id: sessionId },
-          include: [{
-            model: AcPanelImages,
-            as: 'images',
-            where: { is_active: true },
-            required: false
-          }]
-        });
+          console.log('Creating new image record:', imageData);
+          await AcPanelImages.create(imageData);
+
+          // Reload record to get updated images
+          record = await AcPanel.findOne({
+            where: { session_id: sessionId },
+            include: [{
+              model: AcPanelImages,
+              as: 'images',
+              where: { is_active: true },
+              required: false
+            }]
+          });
+          
+        } catch (error) {
+          console.error('Failed to process image:', error);
+          throw new Error(`Failed to process image: ${error.message}`);
+        }
       }
       
       // Transform and return the response
@@ -393,8 +433,9 @@ class AcPanelService {
     }
     
     return {
-      type: 'SERVICE_ERROR',
-      message: error.message
+      type: 'SERVER_ERROR',
+      message: error.message || 'An unexpected error occurred',
+      details: error.stack
     };
   }
 }

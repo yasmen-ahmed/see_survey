@@ -63,45 +63,87 @@ class PowerMeterService {
 
       // Handle image upload if provided
       if (imageFile) {
-        const imageCategory = imageFile.fieldname || 'power_meter_photo';
-        const timestamp = Date.now();
-        const filename = `power_meter_${timestamp}_${imageFile.originalname.replace(/[^a-zA-Z0-9.-]/g, '_')}`;
-        
-        // Create uploads directory if it doesn't exist
-        const uploadDir = path.join(process.cwd(), 'uploads', 'power_meter');
-        if (!fs.existsSync(uploadDir)) {
-          fs.mkdirSync(uploadDir, { recursive: true });
+        try {
+          console.log('Processing image file:', {
+            fieldname: imageFile.fieldname,
+            originalname: imageFile.originalname,
+            path: imageFile.path
+          });
+
+          const imageCategory = imageFile.fieldname || 'power_meter_photo';
+          const timestamp = Date.now();
+          const filename = `power_meter_${timestamp}_${imageFile.originalname.replace(/[^a-zA-Z0-9.-]/g, '_')}`;
+          
+          // Create uploads directory if it doesn't exist
+          const uploadDir = path.join(process.cwd(), 'uploads', 'power_meter');
+          if (!fs.existsSync(uploadDir)) {
+            fs.mkdirSync(uploadDir, { recursive: true });
+          }
+          
+          // Find and deactivate existing image of the same category
+          const existingImage = await PowerMeterImages.findOne({
+            where: {
+              session_id: sessionId,
+              table_id: record.id,
+              image_category: imageCategory,
+              is_active: true
+            }
+          });
+
+          if (existingImage) {
+            // Deactivate old image
+            await existingImage.update({ is_active: false });
+            
+            // Delete old file if it exists
+            try {
+              if (fs.existsSync(existingImage.file_path)) {
+                fs.unlinkSync(existingImage.file_path);
+              }
+            } catch (err) {
+              console.warn('Failed to delete old image file:', err);
+            }
+          }
+
+          // Move file from temp location to final location
+          const finalPath = path.join(uploadDir, filename);
+          fs.copyFileSync(imageFile.path, finalPath);
+          
+          // Clean up temp file
+          try {
+            fs.unlinkSync(imageFile.path);
+          } catch (err) {
+            console.warn('Failed to cleanup temp file:', err);
+          }
+          
+          const imageData = {
+            session_id: sessionId,
+            table_id: record.id,
+            image_category: imageCategory,
+            original_filename: imageFile.originalname,
+            stored_filename: filename,
+            file_path: finalPath,
+            file_url: `/uploads/power_meter/${filename}`,
+            file_size: imageFile.size,
+            mime_type: imageFile.mimetype,
+            is_active: true
+          };
+
+          await PowerMeterImages.create(imageData);
+
+          // Reload record to get updated images
+          record = await PowerMeter.findOne({
+            where: { session_id: sessionId },
+            include: [{
+              model: PowerMeterImages,
+              as: 'images',
+              where: { is_active: true },
+              required: false
+            }]
+          });
+        } catch (error) {
+          console.error('Failed to process image:', error);
+          throw new Error(`Failed to process image: ${error.message}`);
         }
-        
-        // Save file to disk
-        const filePath = path.join(uploadDir, filename);
-        fs.writeFileSync(filePath, imageFile.buffer);
-        
-        const imageData = {
-          session_id: sessionId,
-          table_id: record.id,
-          image_category: imageCategory,
-          original_filename: imageFile.originalname,
-          stored_filename: filename,
-          file_path: filePath,
-          file_url: `/uploads/power_meter/${filename}`,
-          file_size: imageFile.size,
-          mime_type: imageFile.mimetype,
-          is_active: true
-        };
-
-        await PowerMeterImages.create(imageData);
-
-        // Reload record to get updated images
-        record = await PowerMeter.findOne({
-          where: { session_id: sessionId },
-          include: [{
-            model: PowerMeterImages,
-            as: 'images',
-            where: { is_active: true },
-            required: false
-          }]
-        });
       }
       
       // Transform and return the response

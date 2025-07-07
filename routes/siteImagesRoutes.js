@@ -56,39 +56,68 @@ router.get('/:session_id/:category', async (req, res) => {
 // Upload/Update images for a session
 router.put('/:session_id', uploadAnyWithErrorHandling, async (req, res) => {
   try {
+    console.log('PUT request received:', {
+      sessionId: req.params.session_id,
+      files: req.files ? req.files.map(f => ({ fieldname: f.fieldname, originalname: f.originalname })) : 'No files',
+      body: req.body
+    });
+
     const { session_id } = req.params;
     const imageResults = [];
     let hasImageUploadFailures = false;
 
-    if (req.files && req.files.length > 0) {
-      for (const file of req.files) {
-        const category = file.fieldname;
+    if (!req.files || req.files.length === 0) {
+      console.log('No files received in request');
+      return res.status(400).json({
+        success: false,
+        error: 'No files received'
+      });
+    }
 
-        if (!IMAGE_CATEGORIES.includes(category)) {
-          imageResults.push({
-            category,
-            success: false,
-            error: `Invalid category. Must be one of: ${IMAGE_CATEGORIES.join(', ')}`
-          });
-          hasImageUploadFailures = true;
-          continue;
-        }
+    console.log(`Processing ${req.files.length} files`);
+    
+    for (const file of req.files) {
+      const category = file.fieldname;
+      console.log(`Processing file: ${category}`, {
+        originalname: file.originalname,
+        mimetype: file.mimetype,
+        size: file.size
+      });
 
-        try {
-          const result = await SiteImagesService.handleSiteImageUpload(
-            file,
-            session_id,
-            category
-          );
-          imageResults.push({ category, success: true, data: result.data });
-        } catch (err) {
-          hasImageUploadFailures = true;
-          imageResults.push({ category, success: false, error: err.message });
-        }
+      if (!IMAGE_CATEGORIES.includes(category)) {
+        console.log(`Invalid category: ${category}`);
+        imageResults.push({
+          category,
+          success: false,
+          error: `Invalid category. Must be one of: ${IMAGE_CATEGORIES.join(', ')}`
+        });
+        hasImageUploadFailures = true;
+        continue;
+      }
+
+      try {
+        console.log(`Uploading file for category: ${category}`);
+        const result = await SiteImagesService.handleSiteImageUpload(
+          file,
+          session_id,
+          category
+        );
+        console.log(`Upload successful for category: ${category}`);
+        imageResults.push({ category, success: true, data: result.data });
+      } catch (err) {
+        console.error(`Error uploading ${category}:`, err);
+        hasImageUploadFailures = true;
+        imageResults.push({ 
+          category, 
+          success: false, 
+          error: err.message,
+          details: err.stack
+        });
       }
     }
 
     // Get all updated images (including empty placeholders)
+    console.log('Fetching final image state');
     const updatedImages = await SiteImagesService.getSessionImages(session_id);
 
     const successCount = imageResults.filter(r => r.success).length;
@@ -108,9 +137,15 @@ router.put('/:session_id', uploadAnyWithErrorHandling, async (req, res) => {
       }
     };
 
+    console.log('Final response:', response);
     res.status(hasImageUploadFailures ? 400 : 200).json(response);
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    console.error('Route error:', error);
+    res.status(500).json({ 
+      success: false,
+      error: error.message,
+      details: error.stack
+    });
   }
 });
 

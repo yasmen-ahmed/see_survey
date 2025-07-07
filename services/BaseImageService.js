@@ -32,22 +32,48 @@ class BaseImageService {
   }
 
   async saveFile(file) {
-    if (!file) throw new Error('No file provided');
-    if (file.size > this.maxFileSize) throw new Error('File too large');
-    if (!this.allowedMimeTypes.includes(file.mimetype)) throw new Error('Invalid file type');
-
-    await this.ensureUploadDirectory();
-    const stored = this.generateUniqueFilename(file.originalname);
-    const filePath = path.join(this.uploadPath, stored);
-    await fs.writeFile(filePath, file.buffer);
-    return { 
-      originalName: file.originalname, 
-      stored, 
-      filePath, 
-      fileUrl: `/uploads/${this.directoryName}/${stored}`, 
-      size: file.size, 
-      mime: file.mimetype 
-    };
+    try {
+      if (!file) throw new Error('No file provided');
+      if (file.size > this.maxFileSize) throw new Error('File too large');
+      if (!this.allowedMimeTypes.includes(file.mimetype)) throw new Error('Invalid file type');
+      if (!file.path) throw new Error('No file path provided');
+  
+      console.log('Processing file:', {
+        originalname: file.originalname,
+        path: file.path,
+        size: file.size,
+        mimetype: file.mimetype
+      });
+  
+      await this.ensureUploadDirectory();
+      const stored = this.generateUniqueFilename(file.originalname);
+      const filePath = path.join(this.uploadPath, stored);
+      
+      // Read from the temporary file
+      const fileData = await fs.readFile(file.path);
+      
+      // Write to the destination
+      await fs.writeFile(filePath, fileData);
+      
+      // Clean up the temporary file
+      try {
+        await fs.unlink(file.path);
+      } catch (err) {
+        console.warn('Failed to delete temp file:', err);
+      }
+  
+      return { 
+        originalName: file.originalname, 
+        stored, 
+        filePath, 
+        fileUrl: `/uploads/${this.directoryName}/${stored}`, 
+        size: file.size, 
+        mime: file.mimetype 
+      };
+    } catch (error) {
+      console.error('Error in saveFile:', error);
+      throw error;
+    }
   }
 
   async replaceImage({ file, session_id, record_id, image_category, description = null, metadata = {} }) {

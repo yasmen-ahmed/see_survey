@@ -1,15 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const PowerMeterService = require('../services/PowerMeterService');
-const { upload } = require('../middleware/upload');
-
-// Configure upload middleware for power meter images
-const powerMeterUpload = upload.fields([
-  { name: 'power_meter_photo_overview', maxCount: 1 },
-  { name: 'power_meter_photo_zoomed', maxCount: 1 },
-  { name: 'power_meter_cb_photo', maxCount: 1 },
-  { name: 'power_meter_cable_route_photo', maxCount: 1 }
-]);
+const { uploadAnyWithErrorHandling } = require('../middleware/upload');
 
 /**
  * Single endpoint for Power Meter Info
@@ -49,8 +41,14 @@ router.route('/:session_id')
       });
     }
   })
-  .put(powerMeterUpload, async (req, res) => {
+  .put(uploadAnyWithErrorHandling, async (req, res) => {
     try {
+      console.log('Processing Power Meter PUT request:', {
+        sessionId: req.params.session_id,
+        files: req.files ? req.files.map(f => ({ fieldname: f.fieldname, originalname: f.originalname })) : 'No files',
+        body: req.body
+      });
+
       const { session_id } = req.params;
       let updateData = {};
       
@@ -65,26 +63,26 @@ router.route('/:session_id')
         });
       }
 
-      // Process form data if present
-      if (req.body) {
+      // Handle form-data with JSON
+      if (req.body.data) {
         try {
-          // Parse the data JSON string
-          if (req.body.data) {
-            updateData = JSON.parse(req.body.data);
-          }
-        } catch (e) {
+          updateData = JSON.parse(req.body.data);
+        } catch (error) {
           return res.status(400).json({
             success: false,
             error: {
-              type: 'INVALID_REQUEST',
-              message: 'Invalid JSON in form data'
+              type: 'INVALID_JSON',
+              message: 'Invalid JSON in data field'
             }
           });
         }
+      } else {
+        // Handle regular JSON body
+        updateData = req.body;
       }
 
       // Get all uploaded files
-      const imageFiles = req.files ? Object.values(req.files).map(f => f[0]) : [];
+      const imageFiles = req.files || [];
       
       // Validate that either file or body data is present
       if (imageFiles.length === 0 && Object.keys(updateData).length === 0) {
@@ -99,7 +97,7 @@ router.route('/:session_id')
 
       // Process each image file
       for (const file of imageFiles) {
-        const data = await PowerMeterService.getOrCreateBySessionId(
+        await PowerMeterService.getOrCreateBySessionId(
           session_id,
           updateData,
           file
@@ -129,25 +127,12 @@ router.route('/:session_id')
       console.error('Power Meter PUT Error:', error);
       
       let statusCode = 500;
-      let errorType = 'SERVER_ERROR';
-      let errorMessage = error.message || 'An unexpected error occurred';
-
-      if (error.type === 'VALIDATION_ERROR') {
-        statusCode = 400;
-        errorType = 'VALIDATION_ERROR';
-        errorMessage = error.message;
-      } else if (error.type === 'FOREIGN_KEY_ERROR') {
-        statusCode = 400;
-        errorType = 'FOREIGN_KEY_ERROR';
-        errorMessage = error.message;
-      }
-      
       res.status(statusCode).json({
         success: false,
         error: {
-          type: errorType,
-          message: errorMessage,
-          details: error.errors || undefined
+          type: error.type || 'SERVER_ERROR',
+          message: error.message,
+          details: error.stack
         }
       });
     }

@@ -1,10 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const AcConnectionService = require('../services/AcConnectionService');
-const { upload } = require('../middleware/upload'); // Import the raw multer instance
-
-// Configure upload middleware for AC connection images
-const acConnectionUpload = upload.single('generator_photo');
+const { uploadAnyWithErrorHandling } = require('../middleware/upload');
 
 /**
  * Single endpoint for AC Connection Info
@@ -44,11 +41,16 @@ router.route('/:session_id')
       });
     }
   })
-  .put(acConnectionUpload, async (req, res) => {
+  .put(uploadAnyWithErrorHandling, async (req, res) => {
     try {
+      console.log('Processing AC Connection PUT request:', {
+        sessionId: req.params.session_id,
+        files: req.files ? req.files.map(f => ({ fieldname: f.fieldname, originalname: f.originalname })) : 'No files',
+        body: req.body
+      });
+
       const { session_id } = req.params;
-      const updateData = req.body || {};
-      const imageFile = req.file;
+      let updateData = {};
       
       // Validate session_id parameter
       if (!session_id || session_id.trim() === '') {
@@ -60,6 +62,27 @@ router.route('/:session_id')
           }
         });
       }
+
+      // Handle form-data with JSON
+      if (req.body.data) {
+        try {
+          updateData = JSON.parse(req.body.data);
+        } catch (error) {
+          return res.status(400).json({
+            success: false,
+            error: {
+              type: 'INVALID_JSON',
+              message: 'Invalid JSON in data field'
+            }
+          });
+        }
+      } else {
+        // Handle regular JSON body
+        updateData = req.body;
+      }
+      
+      // Get the image file if it exists
+      const imageFile = req.files?.find(f => f.fieldname === 'generator_photo');
       
       // Validate that either file or body data is present
       if (!imageFile && (!updateData || Object.keys(updateData).length === 0)) {
@@ -93,7 +116,11 @@ router.route('/:session_id')
       
       res.status(statusCode).json({
         success: false,
-        error
+        error: {
+          type: error.type || 'SERVER_ERROR',
+          message: error.message,
+          details: error.stack
+        }
       });
     }
   });
