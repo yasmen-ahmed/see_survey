@@ -90,27 +90,54 @@ class DCPowerSystemService {
       dcPowerData: {
         // DC Rectifiers section
         dc_rectifiers: {
-          existing_dc_rectifiers_location: this.validateDropdown(data.existing_dc_rectifiers_location),
-          existing_dc_rectifiers_vendor: this.validateVendor(data.existing_dc_rectifiers_vendor),
-          existing_dc_rectifiers_model: data.existing_dc_rectifiers_model || '',
-          how_many_existing_dc_rectifier_modules: this.validateDropdown(data.how_many_existing_dc_rectifier_modules, 1, 20),
-          rectifier_module_capacity: this.validateNumber(data.rectifier_module_capacity),
-          total_capacity_existing_dc_power_system: this.validateNumber(data.total_capacity_existing_dc_power_system),
-          how_many_free_slot_available_rectifier: this.validateDropdown(data.how_many_free_slot_available_rectifier, 1, 10)
+          existing_dc_rectifiers_location: data.dc_rectifiers?.existing_dc_rectifiers_location || '',
+          existing_dc_rectifiers_vendor: data.dc_rectifiers?.existing_dc_rectifiers_vendor || '',
+          existing_dc_rectifiers_model: data.dc_rectifiers?.existing_dc_rectifiers_model || '',
+          how_many_existing_dc_rectifier_modules: parseInt(data.dc_rectifiers?.how_many_existing_dc_rectifier_modules) || 0,
+          rectifier_module_capacity: parseFloat(data.dc_rectifiers?.rectifier_module_capacity) || 0,
+          total_capacity_existing_dc_power_system: parseFloat(data.dc_rectifiers?.total_capacity_existing_dc_power_system) || 0,
+          how_many_free_slot_available_rectifier: parseInt(data.dc_rectifiers?.how_many_free_slot_available_rectifier) || 0
         },
         
         // Batteries section
         batteries: {
-          existing_batteries_strings_location: this.validateDropdown(data.existing_batteries_strings_location),
-          existing_batteries_vendor: this.validateBatteryVendor(data.existing_batteries_vendor),
-          existing_batteries_type: this.validateRadioButton(data.existing_batteries_type, ['Lead acid', 'Lithium']),
-          how_many_existing_battery_string: this.validateDropdown(data.how_many_existing_battery_string, 1, 10),
-          total_battery_capacity: this.validateNumber(data.total_battery_capacity),
-          how_many_free_slot_available_battery: this.validateDropdown(data.how_many_free_slot_available_battery, 1, 10),
-          new_battery_string_installation_location: this.validateCheckboxArray(data.new_battery_string_installation_location)
+          existing_batteries_strings_location: data.batteries?.existing_batteries_strings_location || '',
+          existing_batteries_vendor: data.batteries?.existing_batteries_vendor || '',
+          existing_batteries_type: data.batteries?.existing_batteries_type || '',
+          how_many_existing_battery_string: parseInt(data.batteries?.how_many_existing_battery_string) || 0,
+          total_battery_capacity: parseFloat(data.batteries?.total_battery_capacity) || 0,
+          how_many_free_slot_available_battery: parseInt(data.batteries?.how_many_free_slot_available_battery) || 0,
+          new_battery_string_installation_location: Array.isArray(data.batteries?.new_battery_string_installation_location) 
+            ? data.batteries.new_battery_string_installation_location 
+            : []
         }
       }
     };
+
+    // Validate the processed data
+    if (processed.dcPowerData.dc_rectifiers) {
+      const dc = processed.dcPowerData.dc_rectifiers;
+      if (dc.how_many_existing_dc_rectifier_modules < 0 || dc.how_many_existing_dc_rectifier_modules > 20) {
+        throw new Error('Number of existing DC rectifier modules must be between 0 and 20');
+      }
+      if (dc.how_many_free_slot_available_rectifier < 0 || dc.how_many_free_slot_available_rectifier > 10) {
+        throw new Error('Number of free slots for rectifier must be between 0 and 10');
+      }
+    }
+
+    if (processed.dcPowerData.batteries) {
+      const bat = processed.dcPowerData.batteries;
+      if (bat.how_many_existing_battery_string < 0 || bat.how_many_existing_battery_string > 10) {
+        throw new Error('Number of existing battery strings must be between 0 and 10');
+      }
+      if (bat.how_many_free_slot_available_battery < 0 || bat.how_many_free_slot_available_battery > 10) {
+        throw new Error('Number of free slots for battery must be between 0 and 10');
+      }
+      if (bat.total_battery_capacity < 0) {
+        throw new Error('Total battery capacity cannot be negative');
+      }
+    }
+
     return processed;
   }
   

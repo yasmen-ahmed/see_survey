@@ -97,27 +97,68 @@ router.put('/:sessionId', upload.fields(getDynamicUploadFields()), async (req, r
     
     // Parse the form data
     let parsedData = {};
-    if (updateData.dc_rectifiers) {
-      parsedData.dc_rectifiers = JSON.parse(updateData.dc_rectifiers);
+    try {
+      if (updateData.dc_rectifiers) {
+        const dc_rectifiers = JSON.parse(updateData.dc_rectifiers);
+        // Ensure numeric values are properly parsed
+        parsedData.dc_rectifiers = {
+          ...dc_rectifiers,
+          how_many_existing_dc_rectifier_modules: parseInt(dc_rectifiers.how_many_existing_dc_rectifier_modules) || 0,
+          rectifier_module_capacity: parseFloat(dc_rectifiers.rectifier_module_capacity) || 0,
+          total_capacity_existing_dc_power_system: parseFloat(dc_rectifiers.total_capacity_existing_dc_power_system) || 0,
+          how_many_free_slot_available_rectifier: parseInt(dc_rectifiers.how_many_free_slot_available_rectifier) || 0
+        };
+      }
+      
+      if (updateData.batteries) {
+        const batteries = JSON.parse(updateData.batteries);
+        // Ensure numeric values are properly parsed
+        parsedData.batteries = {
+          ...batteries,
+          how_many_existing_battery_string: parseInt(batteries.how_many_existing_battery_string) || 0,
+          total_battery_capacity: parseFloat(batteries.total_battery_capacity) || 0,
+          how_many_free_slot_available_battery: parseInt(batteries.how_many_free_slot_available_battery) || 0,
+          new_battery_string_installation_location: Array.isArray(batteries.new_battery_string_installation_location) 
+            ? batteries.new_battery_string_installation_location 
+            : []
+        };
+      }
+    } catch (parseError) {
+      console.error('Error parsing form data:', parseError);
+      return res.status(400).json({
+        success: false,
+        error: {
+          type: 'VALIDATION_ERROR',
+          message: 'Invalid data format'
+        }
+      });
     }
-    if (updateData.batteries) {
-      parsedData.batteries = JSON.parse(updateData.batteries);
-    }
+
+    console.log('Parsed data to update:', parsedData);
+    
+    // Update the DC power system data first
+    const result = await DCPowerSystemService.getOrCreateBySessionId(sessionId, parsedData);
     
     // Handle image uploads if any
+    const uploadedImages = [];
     if (files) {
       for (const [category, fileArray] of Object.entries(files)) {
         if (fileArray && fileArray.length > 0) {
-          await DCPowerSystemImageService.replaceImage({
-            file: fileArray[0],
-            session_id: sessionId,
-            image_category: category
-          });
+          try {
+            const uploadedImage = await DCPowerSystemImageService.replaceImage({
+              file: fileArray[0],
+              session_id: sessionId,
+              image_category: category
+            });
+            uploadedImages.push(uploadedImage);
+          } catch (imageError) {
+            console.error(`Error uploading image for category ${category}:`, imageError);
+          }
         }
       }
     }
     
-    const result = await DCPowerSystemService.getOrCreateBySessionId(sessionId, parsedData);
+    // Get all images after updates
     const images = await DCPowerSystemImageService.getImagesBySessionId(sessionId);
     
     res.status(200).json({

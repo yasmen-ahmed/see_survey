@@ -60,21 +60,72 @@ router.route('/:session_id')
         });
       }
       
-      // Handle different types of requests
+      // Parse the data from the request
       if (req.body.data) {
-        // Form-data with JSON data field
         try {
+          // Try to parse the JSON data
           updateData = JSON.parse(req.body.data);
+          console.log('Parsed JSON data:', updateData);
         } catch (e) {
-          updateData = req.body;
+          console.error('Error parsing JSON data:', e);
+          return res.status(400).json({
+            success: false,
+            error: {
+              type: 'INVALID_DATA',
+              message: 'Invalid JSON data format'
+            }
+          });
         }
       } else if (req.body.numberOfCabinets || req.body.cabinets) {
-        // Form-data with individual fields
-        updateData = req.body;
+        // Handle form data with individual fields
+        updateData = {
+          numberOfCabinets: parseInt(req.body.numberOfCabinets),
+          cabinets: []
+        };
+
+        // Get the number of cabinets
+        const numCabinets = parseInt(req.body.numberOfCabinets) || 1;
+
+        // Process each cabinet's data
+        for (let i = 0; i < numCabinets; i++) {
+          const cabinet = {
+            id: i + 1,
+            type: [],
+            hardware: [],
+            blvdCBsRatings: [],
+            llvdCBsRatings: [],
+            pduCBsRatings: []
+          };
+
+          // Get all fields for this cabinet
+          Object.keys(req.body).forEach(key => {
+            const match = key.match(/^cabinets\[(\d+)\]\[(.+)\]$/);
+            if (match && parseInt(match[1]) === i) {
+              const field = match[2];
+              let value = req.body[key];
+
+              // Parse JSON strings for array fields
+              if (['type', 'hardware', 'blvdCBsRatings', 'llvdCBsRatings', 'pduCBsRatings'].includes(field)) {
+                try {
+                  value = JSON.parse(value);
+                } catch (e) {
+                  console.warn(`Failed to parse JSON for ${field}:`, e);
+                  value = [];
+                }
+              }
+
+              cabinet[field] = value;
+            }
+          });
+
+          updateData.cabinets.push(cabinet);
+        }
       } else if (Object.keys(req.body).length > 0) {
         // Regular JSON body
         updateData = req.body;
       }
+
+      console.log('Final update data:', updateData);
 
       // Process cabinet data if present
       if (updateData && Object.keys(updateData).length > 0) {
@@ -202,18 +253,16 @@ router.route('/:session_id')
           }
         }
 
-        // Get current data
-        const data = await OutdoorCabinetsService.getOrCreateBySessionId(session_id);
+        // Get updated data with images
+        const finalData = await OutdoorCabinetsService.getOrCreateBySessionId(session_id);
 
         const successCount = imageResults.filter(r => r.success).length;
         const failCount = imageResults.filter(r => !r.success).length;
 
         res.json({
           success: !hasImageUploadFailures,
-          data,
-          message: hasImageUploadFailures
-            ? `${failCount} image upload(s) failed`
-            : `${successCount} image(s) uploaded successfully`,
+          data: finalData,
+          message: `${successCount} image(s) uploaded successfully${failCount > 0 ? `, ${failCount} failed` : ''}`,
           images_processed: {
             total: imageResults.length,
             successful: successCount,
@@ -225,20 +274,15 @@ router.route('/:session_id')
         return res.status(400).json({
           success: false,
           error: {
-            type: 'INVALID_BODY',
+            type: 'INVALID_REQUEST',
             message: 'No data or files provided'
           }
         });
       }
-      
     } catch (error) {
       console.error('Outdoor Cabinets PUT Error:', error);
       
-      let statusCode = 500;
-      if (error.type === 'VALIDATION_ERROR') statusCode = 400;
-      if (error.type === 'FOREIGN_KEY_ERROR') statusCode = 400;
-      if (error.type === 'DUPLICATE_ERROR') statusCode = 409;
-      
+      const statusCode = error.type === 'VALIDATION_ERROR' ? 400 : 500;
       res.status(statusCode).json({
         success: false,
         error
