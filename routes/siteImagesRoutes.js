@@ -66,13 +66,13 @@ router.put('/:session_id', uploadAnyWithErrorHandling, async (req, res) => {
     const imageResults = [];
     let hasImageUploadFailures = false;
 
-    if (!req.files || req.files.length === 0) {
-      console.log('No files received in request');
-      return res.status(400).json({
-        success: false,
-        error: 'No files received'
-      });
-    }
+    // if (!req.files || req.files.length === 0) {
+    //   console.log('No files received in request');
+    //   return res.status(400).json({
+    //     success: false,
+    //     error: 'No files received'
+    //   });
+    // }
 
     console.log(`Processing ${req.files.length} files`);
     
