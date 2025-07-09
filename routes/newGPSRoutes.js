@@ -98,127 +98,108 @@ router.put('/:session_id', uploadAnyWithErrorHandling, async (req, res) => {
     const { session_id } = req.params;
     let gpsData = req.body;
 
-    // Handle multipart/form-data format (when uploading files)
-    if (req.files && req.files.length > 0) {
-      // Parse data from form data if it exists
-      if (gpsData.data && typeof gpsData.data === 'string') {
-        try {
-          gpsData = JSON.parse(gpsData.data);
-        } catch (error) {
-          return res.status(400).json({
-            error: 'Invalid JSON format in data field'
-          });
-        }
+    console.log('Original request body:', req.body);
+
+    // Parse the data if it's a string
+    if (typeof gpsData.data === 'string') {
+      try {
+        const parsedData = JSON.parse(gpsData.data);
+        console.log('Parsed data:', parsedData);
+        
+        // Map the frontend field names to backend field names
+        gpsData = {
+          gps_antenna_location: parsedData.gps_antenna_location,
+          gps_antenna_height: parseFloat(parsedData.gps_antenna_height),
+          gps_cable_length: parseFloat(parsedData.gps_cable_length)
+        };
+      } catch (error) {
+        console.error('Error parsing data:', error);
+        return res.status(400).json({ error: 'Invalid JSON format in data field' });
       }
     }
 
-    // Validate GPS data
-    if (gpsData.gps_antenna_location && !['On tower', 'On building'].includes(gpsData.gps_antenna_location)) {
+    console.log('Processed GPS data:', gpsData);
+
+    // Validate the data
+    if (!gpsData.gps_antenna_location) {
+      return res.status(400).json({ error: 'GPS antenna location is required' });
+    }
+
+    if (!['On tower', 'On building'].includes(gpsData.gps_antenna_location)) {
       return res.status(400).json({ error: 'Invalid GPS antenna location' });
     }
 
-    let gps = await NewGPS.findOne({
-      where: { session_id }
+    if (typeof gpsData.gps_antenna_height !== 'number' || gpsData.gps_antenna_height < 0) {
+      return res.status(400).json({ error: 'GPS antenna height must be a positive number' });
+    }
+
+    if (typeof gpsData.gps_cable_length !== 'number' || gpsData.gps_cable_length < 0) {
+      return res.status(400).json({ error: 'GPS cable length must be a positive number' });
+    }
+
+    // Find or create the GPS record
+    let [gps, created] = await NewGPS.findOrCreate({
+      where: { session_id },
+      defaults: gpsData
     });
 
-    if (!gps) {
-      // Create new GPS record
-      gps = await NewGPS.create({
-        session_id,
-        ...gpsData
-      });
-    } else {
-      // Update existing GPS record
+    if (!created) {
+      // Update existing record
       await gps.update(gpsData);
+      console.log('Updated existing GPS record:', gps.toJSON());
+    } else {
+      console.log('Created new GPS record:', gps.toJSON());
     }
 
-    // Handle image uploads if present
-    const imageResults = [];
-    let hasImageUploadFailures = false;
-    
+    // Handle image uploads
     if (req.files && req.files.length > 0) {
       for (const file of req.files) {
-        try {
-          const field = file.fieldname;
-          
-          // Validate image field name format
-          if (!field.startsWith('new_gps_1_proposed_location')) {
-            throw new Error(`Invalid image field name: ${field}. Expected format: new_gps_1_proposed_location or new_gps_1_proposed_location_optional_photo`);
-          }
-
-          // Check for existing image with the same category
-          const existingImage = await NewGPSImages.findOne({
-            where: {
-              session_id,
-              image_category: field
-            }
-          });
-
-          if (existingImage) {
-            // Delete the old image file if it exists
-            const oldImagePath = path.join(__dirname, '..', existingImage.image_path);
-            if (fs.existsSync(oldImagePath)) {
-              fs.unlinkSync(oldImagePath);
-            }
-            // Delete the old image record
-            await existingImage.destroy();
-          }
-
-          // Create a unique filename that includes the category
-          const fileExt = path.extname(file.originalname);
-          const uniqueFilename = `new_gps_${field}_${Date.now()}${fileExt}`;
-          const relativePath = `uploads/new_gps/${uniqueFilename}`;
-          const fullPath = path.join(__dirname, '..', relativePath);
-          
-          // Ensure the directory exists
-          fs.mkdirSync(path.dirname(fullPath), { recursive: true });
-          
-          // Copy the uploaded file to the final location
-          fs.copyFileSync(file.path, fullPath);
-          
-          // Delete the temporary upload file
-          fs.unlinkSync(file.path);
-          
-          const image = await NewGPSImages.create({
-            session_id,
-            image_category: field,
-            image_path: relativePath
-          });
-          
-          imageResults.push({ field, success: true, data: image });
-        } catch (err) {
-          hasImageUploadFailures = true;
-          imageResults.push({ field: file.fieldname, success: false, error: err.message });
+        const field = file.fieldname;
+        
+        if (!field.startsWith('new_gps_1_proposed_location')) {
+          continue; // Skip invalid image fields
         }
+
+        // Handle existing image
+        const existingImage = await NewGPSImages.findOne({
+          where: { session_id, image_category: field }
+        });
+
+        if (existingImage) {
+          const oldImagePath = path.join(__dirname, '..', existingImage.image_path);
+          if (fs.existsSync(oldImagePath)) {
+            fs.unlinkSync(oldImagePath);
+          }
+          await existingImage.destroy();
+        }
+
+        // Save new image
+        const fileExt = path.extname(file.originalname);
+        const uniqueFilename = `new_gps_${field}_${Date.now()}${fileExt}`;
+        const relativePath = `uploads/new_gps/${uniqueFilename}`;
+        const fullPath = path.join(__dirname, '..', relativePath);
+        
+        fs.mkdirSync(path.dirname(fullPath), { recursive: true });
+        fs.copyFileSync(file.path, fullPath);
+        fs.unlinkSync(file.path);
+        
+        await NewGPSImages.create({
+          session_id,
+          image_category: field,
+          image_path: relativePath
+        });
       }
     }
 
-    const successCount = imageResults.filter(r => r.success).length;
-    const failCount = imageResults.filter(r => !r.success).length;
-
+    // Get updated data with images
     const formattedData = await formatGPSData(gps, session_id);
+    console.log('Final formatted data:', formattedData);
 
-    const response = {
+    res.json({
       message: `GPS data for session ${session_id} updated successfully`,
       data: formattedData
-    };
-    
-    if (imageResults.length > 0) {
-      response.images_processed = {
-        total: imageResults.length,
-        successful: successCount,
-        failed: failCount,
-        details: imageResults
-      };
-      
-      if (hasImageUploadFailures) {
-        response.message += ` but ${failCount} image upload(s) failed`;
-      } else {
-        response.message += ` and ${successCount} image(s) processed`;
-      }
-    }
+    });
 
-    res.json(response);
   } catch (error) {
     console.error('Error in GPS update:', error);
     res.status(400).json({ error: error.message });

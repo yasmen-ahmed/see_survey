@@ -57,9 +57,9 @@ const validateRadioUnitData = (radioUnitData) => {
       if (conn.sector && (conn.sector < 1 || conn.sector > 5)) {
         throw new Error(`Nokia connectivity ${index + 1}: Sector must be 1-5`);
       }
-      if (conn.antenna && (conn.antenna < 1 || conn.antenna > 15)) {
-        throw new Error(`Nokia connectivity ${index + 1}: Antenna must be 1-15`);
-      }
+      // if (conn.antenna && (conn.antenna < 1 || conn.antenna > 15)) {
+      //   throw new Error(`Nokia connectivity ${index + 1}: Antenna must be 1-15`);
+      // }
       if (conn.jumper_length && (isNaN(conn.jumper_length) || conn.jumper_length < 0)) {
         throw new Error(`Nokia connectivity ${index + 1}: Jumper length must be a positive number`);
       }

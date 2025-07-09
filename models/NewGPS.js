@@ -7,52 +7,36 @@ const NewGPS = sequelize.define('NewGPS', {
     primaryKey: true,
     autoIncrement: true
   },
-  
   session_id: {
     type: DataTypes.STRING,
-    allowNull: false,
-    unique: true
+    allowNull: false
   },
-  
-  // GPS antenna configuration
   gps_antenna_location: {
-    type: DataTypes.ENUM('On tower', 'On building'),
-    allowNull: true
+    type: DataTypes.STRING,
+    allowNull: true,
+    validate: {
+      isIn: [['On tower', 'On building']]
+    }
   },
-  
   gps_antenna_height: {
-    type: DataTypes.DECIMAL(10, 2),
+    type: DataTypes.FLOAT,
     allowNull: true,
-    comment: 'GPS antenna height from tower base level in meters'
+    validate: {
+      min: 0
+    }
   },
-  
   gps_cable_length: {
-    type: DataTypes.DECIMAL(10, 2),
+    type: DataTypes.FLOAT,
     allowNull: true,
-    comment: 'Cable length from new GPS antenna location to base band in meters'
-  },
-
-  created_at: {
-    type: DataTypes.DATE,
-    defaultValue: DataTypes.NOW
-  },
-  
-  updated_at: {
-    type: DataTypes.DATE,
-    defaultValue: DataTypes.NOW
+    validate: {
+      min: 0
+    }
   }
 }, {
   tableName: 'new_gps',
   timestamps: true,
   createdAt: 'created_at',
-  updatedAt: 'updated_at',
-  indexes: [
-    {
-      unique: true,
-      fields: ['session_id'],
-      name: 'unique_session_gps_idx'
-    }
-  ]
+  updatedAt: 'updated_at'
 });
 
 module.exports = NewGPS; 
