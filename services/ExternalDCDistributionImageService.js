@@ -1,4 +1,5 @@
 const fs = require('fs').promises;
+const fsSync = require('fs');
 const path = require('path');
 const crypto = require('crypto');
 const ExternalDCDistributionImages = require('../models/ExternalDCDistributionImages');
@@ -36,7 +37,16 @@ class ExternalDCDistributionImageService {
     await this.ensureUploadDirectory();
     const stored = this.generateUniqueFilename(file.originalname);
     const filePath = path.join(this.uploadDir, stored);
-    await fs.writeFile(filePath, file.buffer);
+    if (file.buffer) {
+      // Memory storage: write buffer directly
+      await fs.writeFile(filePath, file.buffer);
+    } else if (file.path) {
+      // Disk storage: move file from temp location
+      await fs.copyFile(file.path, filePath);
+      await fs.unlink(file.path); // Remove temp file
+    } else {
+      throw new Error('No file buffer or path found on uploaded file');
+    }
     return { 
       originalName: file.originalname, 
       stored, 

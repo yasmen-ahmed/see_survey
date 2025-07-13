@@ -282,4 +282,67 @@ router.get('/:sessionId/cabinet-options', async (req, res) => {
   }
 });
 
+/**
+ * GET /api/external-dc-distribution/cabinet-data/:sessionId/:cabinetNumber/:distributionType
+ * Get CB options for a specific cabinet and distribution type
+ */
+router.get('/cabinet-data/:sessionId/:cabinetNumber/:distributionType', async (req, res) => {
+  try {
+    const { sessionId, cabinetNumber, distributionType } = req.params;
+    const OutdoorCabinets = require('../models/OutdoorCabinets');
+    const cabinetNum = parseInt(cabinetNumber, 10);
+    const distType = distributionType.toUpperCase();
+
+    // Fetch outdoor cabinets record
+    const outdoorCabinets = await OutdoorCabinets.findOne({ where: { session_id: sessionId } });
+    if (!outdoorCabinets || !Array.isArray(outdoorCabinets.cabinets)) {
+      return res.status(404).json({
+        success: false,
+        error: 'No outdoor cabinets found for this session.'
+      });
+    }
+
+    // Get the specified cabinet (1-based index)
+    const cabinet = outdoorCabinets.cabinets[cabinetNum - 1];
+    if (!cabinet) {
+      return res.status(404).json({
+        success: false,
+        error: `Cabinet #${cabinetNum} not found.`
+      });
+    }
+
+    // Determine which CB array to use
+    let cbArray = [];
+    if (distType === 'BLVD' && Array.isArray(cabinet.blvdCBsRatings)) {
+      cbArray = cabinet.blvdCBsRatings;
+    } else if (distType === 'LLVD' && Array.isArray(cabinet.llvdCBsRatings)) {
+      cbArray = cabinet.llvdCBsRatings;
+    } else if ((distType === 'PDU' || distType === 'DC_PDU') && Array.isArray(cabinet.pduCBsRatings)) {
+      cbArray = cabinet.pduCBsRatings;
+    }
+
+    // Transform to frontend format
+    const cbOptions = cbArray.map((cb, idx) => ({
+      id: `field_${idx + 1}`,
+      field_number: idx + 1,
+      cb_rating_amp: cb.rating || '',
+      connected_load: cb.connected_load || '',
+      value: `CB${idx + 1}`,
+      display_text: `CB${idx + 1} - ${cb.rating || ''}A - ${cb.connected_load || ''}`,
+      recommended: false
+    }));
+
+    res.json({
+      success: true,
+      data: cbOptions
+    });
+  } catch (error) {
+    console.error('Error fetching cabinet CB options:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message || 'Failed to fetch cabinet CB options.'
+    });
+  }
+});
+
 module.exports = router; 

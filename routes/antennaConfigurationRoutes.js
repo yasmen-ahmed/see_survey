@@ -209,6 +209,22 @@ router.get('/:sessionId', async (req, res) => {
     
     const result = await AntennaConfigurationService.getOrCreateBySessionId(sessionId);
     
+    // Process images to ensure they have the correct format
+    if (result.antennas) {
+      result.antennas = result.antennas.map(antenna => {
+        if (antenna.images) {
+          antenna.images = antenna.images.map(image => ({
+            id: image.id,
+            image_category: image.image_category,
+            file_url: image.file_url.startsWith('/') ? image.file_url : `/${image.file_url}`,
+            original_filename: image.original_filename,
+            description: image.description
+          }));
+        }
+        return antenna;
+      });
+    }
+    
     res.status(200).json({
       success: true,
       data: result,

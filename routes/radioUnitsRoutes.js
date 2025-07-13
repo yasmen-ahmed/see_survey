@@ -3,97 +3,149 @@ const router = express.Router();
 const RadioUnits = require('../models/RadioUnits');
 const OutdoorCabinets = require('../models/OutdoorCabinets');
 const ExternalDCDistribution = require('../models/ExternalDCDistribution');
+const multer = require('multer');
+const path = require('path');
+const fs = require('fs');
+
+// Configure multer for radio unit images
+const radioUnitStorage = multer.diskStorage({
+  destination: function (req, file, cb) {
+    const uploadDir = path.join(__dirname, '../uploads/radio_units');
+    fs.mkdirSync(uploadDir, { recursive: true });
+    cb(null, uploadDir);
+  },
+  filename: function (req, file, cb) {
+    const timestamp = Date.now();
+    const uniqueSuffix = Math.round(Math.random() * 1E9);
+    cb(null, `${file.fieldname}_${timestamp}_${uniqueSuffix}${path.extname(file.originalname)}`);
+  }
+});
+
+const radioUnitUpload = multer({
+  storage: radioUnitStorage,
+  limits: {
+    fileSize: 10 * 1024 * 1024, // 10MB limit
+    files: 20 // Max 20 files (4 images per radio unit, max 5 units)
+  },
+  fileFilter: (req, file, cb) => {
+    const allowedTypes = /jpeg|jpg|png|gif|webp|bmp/;
+    const extname = allowedTypes.test(path.extname(file.originalname).toLowerCase());
+    const mimetype = allowedTypes.test(file.mimetype);
+    
+    if (mimetype && extname) {
+      return cb(null, true);
+    } else {
+      cb(new Error('Only image files are allowed (jpeg, jpg, png, gif, webp, bmp)'));
+    }
+  }
+});
 
 // Validation helper for radio unit data
-const validateRadioUnitData = (radioUnitData) => {
-  const validOperators = ['Operator 1', 'Operator 2', 'Operator 3', 'Operator 4'];
-  const validTowerLegs = ['A', 'B', 'C', 'D'];
-  const validVendors = ['Nokia', 'Huawei', 'Ericsson', 'ZTE', 'Other'];
-  const validPorts = ['2', '4', '6', '8', '9'];
-  const validYesNo = ['Yes', 'No'];
-  const validRadioButtons = ['A', 'B', 'C', 'D'];
-  const validFeederTypes = ['7/8 inch', '1-1/4 inch', '1-5/4 inch', '1/2 inch'];
+// const validateRadioUnitData = (radioUnitData) => {
+//   const validOperators = ['Operator 1', 'Operator 2', 'Operator 3', 'Operator 4'];
+//   const validTowerLegs = ['A', 'B', 'C', 'D'];
+//   const validVendors = ['Nokia', 'Huawei', 'Ericsson', 'ZTE', 'Other'];
+//   const validPorts = [2, '4', '6', '8', '9'];
+//   const validYesNo = ['Yes', 'No'];
+//   const validRadioButtons = ['A', 'B', 'C', 'D'];
+//   const validFeederTypes = ['7/8 inch', '1-1/4 inch', '1-5/4 inch', '1/2 inch'];
   
-  // More flexible DC power source validation - includes both predefined and dynamic values
-  const validateDcPowerSource = (source) => {
-    if (!source) return true; // Allow empty
+//   // More flexible DC power source validation - includes both predefined and dynamic values
+//   const validateDcPowerSource = (source) => {
+//     if (!source) return true; // Allow empty
     
-    // Predefined values
-    const predefinedSources = ['Directly from rectifier distribution', 'External DC PDU #1', 'External DC PDU #2'];
-    if (predefinedSources.includes(source)) return true;
+//     // Predefined values
+//     const predefinedSources = ['Directly from rectifier distribution', 'External DC PDU #1', 'External DC PDU #2'];
+//     if (predefinedSources.includes(source)) return true;
     
-    // Cabinet format: "cabinet_1", "cabinet_2", etc.
-    if (/^cabinet_\d+$/.test(source)) return true;
+//     // Cabinet format: "cabinet_1", "cabinet_2", etc.
+//     if (/^cabinet_\d+$/.test(source)) return true;
     
-    // Cabinet specific format: "cabinet_1_blvd_0", "cabinet_2_pdu_1", etc.
-    if (/^cabinet_\d+_(blvd|llvd|pdu)_\d+$/.test(source)) return true;
+//     // Cabinet specific format: "cabinet_1_blvd_0", "cabinet_2_pdu_1", etc.
+//     if (/^cabinet_\d+_(blvd|llvd|pdu)_\d+$/.test(source)) return true;
     
-    // External PDU format: "external_pdu_1_main_feed", "pdu_1_rating_0", etc.
-    if (/^(external_)?pdu_\d+_(main_feed|rating_\d+)$/.test(source)) return true;
+//     // External PDU format: "external_pdu_1_main_feed", "pdu_1_rating_0", etc.
+//     if (/^(external_)?pdu_\d+_(main_feed|rating_\d+)$/.test(source)) return true;
     
-    return false;
-  };
+//     return false;
+//   };
 
-  // Validate basic fields
-  if (radioUnitData.operator && !validOperators.includes(radioUnitData.operator)) {
-    throw new Error(`Invalid operator: ${radioUnitData.operator}`);
-  }
+//   // Validate basic fields
+//   if (radioUnitData.operator && !validOperators.includes(radioUnitData.operator)) {
+//     throw new Error(`Invalid operator: ${radioUnitData.operator}`);
+//   }
   
-  if (radioUnitData.tower_leg && !validTowerLegs.includes(radioUnitData.tower_leg)) {
-    throw new Error(`Invalid tower leg: ${radioUnitData.tower_leg}`);
-  }
+//   if (radioUnitData.tower_leg && !validTowerLegs.includes(radioUnitData.tower_leg)) {
+//     throw new Error(`Invalid tower leg: ${radioUnitData.tower_leg}`);
+//   }
   
-  if (radioUnitData.vendor && !validVendors.includes(radioUnitData.vendor)) {
-    throw new Error(`Invalid vendor: ${radioUnitData.vendor}`);
-  }
+//   if (radioUnitData.vendor && !validVendors.includes(radioUnitData.vendor)) {
+//     throw new Error(`Invalid vendor: ${radioUnitData.vendor}`);
+//   }
   
-  if (radioUnitData.nokia_ports && !validPorts.includes(radioUnitData.nokia_ports)) {
-    throw new Error(`Invalid Nokia ports: ${radioUnitData.nokia_ports}`);
-  }
+//   if (radioUnitData.nokia_ports && !validPorts.includes(radioUnitData.nokia_ports)) {
+//     throw new Error(`Invalid Nokia ports: ${radioUnitData.nokia_ports}`);
+//   }
 
-  // Validate Nokia port connectivity array
-  if (radioUnitData.nokia_port_connectivity && Array.isArray(radioUnitData.nokia_port_connectivity)) {
-    radioUnitData.nokia_port_connectivity.forEach((conn, index) => {
-      if (conn.sector && (conn.sector < 1 || conn.sector > 5)) {
-        throw new Error(`Nokia connectivity ${index + 1}: Sector must be 1-5`);
-      }
-      // if (conn.antenna && (conn.antenna < 1 || conn.antenna > 15)) {
-      //   throw new Error(`Nokia connectivity ${index + 1}: Antenna must be 1-15`);
-      // }
-      if (conn.jumper_length && (isNaN(conn.jumper_length) || conn.jumper_length < 0)) {
-        throw new Error(`Nokia connectivity ${index + 1}: Jumper length must be a positive number`);
-      }
-    });
-  }
+//   // Validate Nokia port connectivity array
+//   if (radioUnitData.nokia_port_connectivity && Array.isArray(radioUnitData.nokia_port_connectivity)) {
+//     radioUnitData.nokia_port_connectivity.forEach((conn, index) => {
+//       if (conn.sector && (conn.sector < 1 || conn.sector > 5)) {
+//         throw new Error(`Nokia connectivity ${index + 1}: Sector must be 1-5`);
+//       }
+//       // if (conn.antenna && (conn.antenna < 1 || conn.antenna > 15)) {
+//       //   throw new Error(`Nokia connectivity ${index + 1}: Antenna must be 1-15`);
+//       // }
+//       if (conn.jumper_length && (isNaN(conn.jumper_length) || conn.jumper_length < 0)) {
+//         throw new Error(`Nokia connectivity ${index + 1}: Jumper length must be a positive number`);
+//       }
+//     });
+//   }
 
-  // Validate dimensions for other vendors
-  if (radioUnitData.vendor === 'Other') {
-    ['length', 'width', 'depth'].forEach(dim => {
-      if (radioUnitData[`other_${dim}`] && (isNaN(radioUnitData[`other_${dim}`]) || radioUnitData[`other_${dim}`] < 0)) {
-        throw new Error(`Invalid ${dim} dimension`);
-      }
-    });
-  }
+//   // Validate dimensions for other vendors
+//   if (radioUnitData.vendor === 'Other') {
+//     ['length', 'width', 'depth'].forEach(dim => {
+//       if (radioUnitData[`other_${dim}`] && (isNaN(radioUnitData[`other_${dim}`]) || radioUnitData[`other_${dim}`] < 0)) {
+//         throw new Error(`Invalid ${dim} dimension`);
+//       }
+//     });
+//   }
 
-  // Validate radio buttons and Yes/No fields
-  if (radioUnitData.radio_unit_side_arm && !validRadioButtons.includes(radioUnitData.radio_unit_side_arm)) {
-    throw new Error(`Invalid radio unit side arm: ${radioUnitData.radio_unit_side_arm}`);
-  }
+//   // Validate numeric fields that should be positive
+//   const numericFields = [
+//     'base_height', 'other_length', 'other_width', 'other_depth',
+//     'radio_unit_side_arm_length', 'radio_unit_side_arm_diameter', 'radio_unit_side_arm_offset',
+//     'dc_power_cable_length', 'dc_power_cable_cross_section', 'fiber_cable_length',
+//     'feeder_length', 'earth_cable_length'
+//   ];
 
-  if (radioUnitData.feeder_type && !validFeederTypes.includes(radioUnitData.feeder_type)) {
-    throw new Error(`Invalid feeder type: ${radioUnitData.feeder_type}`);
-  }
+//   numericFields.forEach(field => {
+//     if (radioUnitData[field] !== null && radioUnitData[field] !== undefined) {
+//       if (isNaN(radioUnitData[field]) || radioUnitData[field] < 0) {
+//         throw new Error(`Invalid ${field}: must be a positive number`);
+//       }
+//     }
+//   });
 
-  // Enhanced DC power source validation
-  if (radioUnitData.dc_power_source && !validateDcPowerSource(radioUnitData.dc_power_source)) {
-    throw new Error(`Invalid DC power source: ${radioUnitData.dc_power_source}. Expected formats: "cabinet_1", "cabinet_1_blvd_0", "external_pdu_1_main_feed", or predefined values`);
-  }
+//   // Validate radio buttons and Yes/No fields
+//   if (radioUnitData.radio_unit_side_arm && !validRadioButtons.includes(radioUnitData.radio_unit_side_arm)) {
+//     throw new Error(`Invalid radio unit side arm: ${radioUnitData.radio_unit_side_arm}`);
+//   }
+
+//   if (radioUnitData.feeder_type && !validFeederTypes.includes(radioUnitData.feeder_type)) {
+//     throw new Error(`Invalid feeder type: ${radioUnitData.feeder_type}`);
+//   }
+
+//   // Enhanced DC power source validation
+//   if (radioUnitData.dc_power_source && !validateDcPowerSource(radioUnitData.dc_power_source)) {
+//     throw new Error(`Invalid DC power source: ${radioUnitData.dc_power_source}. Expected formats: "cabinet_1", "cabinet_1_blvd_0", "external_pdu_1_main_feed", or predefined values`);
+//   }
   
-  // Enhanced DC CB/Fuse validation (similar patterns)
-  if (radioUnitData.dc_cb_fuse && !validateDcPowerSource(radioUnitData.dc_cb_fuse)) {
-    throw new Error(`Invalid DC CB/Fuse: ${radioUnitData.dc_cb_fuse}. Expected formats: "cabinet_1_blvd_0", "external_pdu_1_main_feed", etc.`);
-  }
-};
+//   // Enhanced DC CB/Fuse validation (similar patterns)
+//   if (radioUnitData.dc_cb_fuse && !validateDcPowerSource(radioUnitData.dc_cb_fuse)) {
+//     throw new Error(`Invalid DC CB/Fuse: ${radioUnitData.dc_cb_fuse}. Expected formats: "cabinet_1_blvd_0", "external_pdu_1_main_feed", etc.`);
+//   }
+// };
 
 // Helper function to get default empty data structure
 const getDefaultEmptyData = (sessionId) => {
@@ -625,15 +677,15 @@ router.post('/:session_id', async (req, res) => {
     }
     
     // Validate radio units data if provided
-    if (radio_units && Array.isArray(radio_units)) {
-      for (let i = 0; i < radio_units.length; i++) {
-        try {
-          validateRadioUnitData(radio_units[i]);
-        } catch (error) {
-          return res.status(400).json({ error: `Radio unit ${i + 1}: ${error.message}` });
-        }
-      }
-    }
+    // if (radio_units && Array.isArray(radio_units)) {
+    //   for (let i = 0; i < radio_units.length; i++) {
+    //     try {
+    //       validateRadioUnitData(radio_units[i]);
+    //     } catch (error) {
+    //       return res.status(400).json({ error: `Radio unit ${i + 1}: ${error.message}` });
+    //     }
+    //   }
+    // }
     
     // Check if data already exists for this session
     let radioUnitsRecord = await RadioUnits.findOne({
@@ -668,10 +720,26 @@ router.post('/:session_id', async (req, res) => {
 });
 
 // PUT /api/radio-units/:session_id
-router.put('/:session_id', async (req, res) => {
+router.put('/:session_id', radioUnitUpload.any(), async (req, res) => {
   try {
     const { session_id } = req.params;
-    const { radio_unit_count, radio_units } = req.body;
+    
+    // Parse radio units data from FormData
+    let radioUnitsData = {};
+    if (req.body.radio_units_data) {
+      try {
+        radioUnitsData = JSON.parse(req.body.radio_units_data);
+        console.log('Parsed radio units data:', JSON.stringify(radioUnitsData, null, 2));
+      } catch (parseError) {
+        console.error('Error parsing radio_units_data:', parseError);
+        return res.status(400).json({ error: 'Invalid radio_units_data JSON format' });
+      }
+    } else {
+      console.log('No radio_units_data found in request body');
+      console.log('Request body keys:', Object.keys(req.body));
+    }
+    
+    const { radio_unit_count, radio_units } = radioUnitsData;
     
     // Validate basic fields
     if (radio_unit_count && (radio_unit_count < 1 || radio_unit_count > 20)) {
@@ -679,19 +747,106 @@ router.put('/:session_id', async (req, res) => {
     }
     
     // Validate radio units data if provided
-    if (radio_units && Array.isArray(radio_units)) {
-      for (let i = 0; i < radio_units.length; i++) {
-        try {
-          validateRadioUnitData(radio_units[i]);
-        } catch (error) {
-          return res.status(400).json({ error: `Radio unit ${i + 1}: ${error.message}` });
-        }
-      }
-    }
+    // if (radio_units && Array.isArray(radio_units)) {
+    //   for (let i = 0; i < radio_units.length; i++) {
+    //     try {
+    //       validateRadioUnitData(radio_units[i]);
+    //     } catch (error) {
+    //       return res.status(400).json({ error: `Radio unit ${i + 1}: ${error.message}` });
+    //     }
+    //   }
+    // }
     
     let radioUnitsRecord = await RadioUnits.findOne({
       where: { session_id }
     });
+    
+    // Process uploaded images and track removed images
+    const uploadedImages = [];
+    const removedImageFields = [];
+    
+    if (req.files && req.files.length > 0) {
+      req.files.forEach(file => {
+        uploadedImages.push({
+          fieldname: file.fieldname,
+          filename: file.filename,
+          originalname: file.originalname,
+          path: file.path,
+          url: `/uploads/radio_units/${file.filename}`
+        });
+      });
+    }
+    
+    // Check for removed images (empty strings in form data)
+    // Only check fields that are actually present in the request
+    Object.keys(req.body).forEach(key => {
+      if ((key.startsWith('radio_unit_') && key.endsWith('_front')) || 
+          (key.startsWith('radio_unit_') && key.endsWith('_back')) ||
+          (key.startsWith('radio_unit_') && key.endsWith('_label')) ||
+          (key.startsWith('radio_unit_') && key.endsWith('_side'))) {
+        if (req.body[key] === '') {
+          removedImageFields.push(key);
+        }
+      }
+    });
+    
+    console.log('Uploaded images:', uploadedImages.length);
+    console.log('Removed image fields:', removedImageFields);
+    
+    // Add image information to radio units data
+    if (uploadedImages.length > 0 && radio_units) {
+      radio_units.forEach((unit, index) => {
+        if (!unit.images) unit.images = [];
+        
+        // Find images for this radio unit
+        const unitImages = uploadedImages.filter(img => 
+          img.fieldname.startsWith(`radio_unit_${index + 1}_`)
+        );
+        
+        unitImages.forEach(img => {
+          unit.images.push({
+            category: img.fieldname,
+            file_url: img.url,
+            original_filename: img.originalname
+          });
+        });
+      });
+    }
+    
+    // Preserve existing images that are not being replaced or removed
+    if (radioUnitsRecord && radioUnitsRecord.radio_units && radio_units) {
+      radio_units.forEach((unit, index) => {
+        const existingUnit = radioUnitsRecord.radio_units[index];
+        if (existingUnit && existingUnit.images && Array.isArray(existingUnit.images)) {
+          if (!unit.images) unit.images = [];
+          
+          // Get categories of newly uploaded images for this unit
+          const newImageCategories = unit.images.map(img => img.category);
+          
+          // Get categories of removed images for this unit
+          const removedCategories = removedImageFields.filter(field => 
+            field.startsWith(`radio_unit_${index + 1}_`)
+          );
+          
+          console.log(`Unit ${index + 1}: New image categories:`, newImageCategories);
+          console.log(`Unit ${index + 1}: Removed categories:`, removedCategories);
+          console.log(`Unit ${index + 1}: Existing images:`, existingUnit.images.map(img => img.category));
+          
+          // Add existing images that are not being replaced or removed
+          existingUnit.images.forEach(existingImg => {
+            if (!newImageCategories.includes(existingImg.category) && 
+                !removedCategories.includes(existingImg.category)) {
+              unit.images.push(existingImg);
+              console.log(`Unit ${index + 1}: Preserved image ${existingImg.category}`);
+            } else {
+              console.log(`Unit ${index + 1}: Skipped image ${existingImg.category} (replaced or removed)`);
+            }
+          });
+          
+          console.log(`Unit ${index + 1}: Final image count: ${unit.images.length}`);
+        }
+      });
+    }
     
     if (!radioUnitsRecord) {
       // Create new record if it doesn't exist
@@ -713,6 +868,7 @@ router.put('/:session_id', async (req, res) => {
       data: radioUnitsRecord.toJSON()
     });
   } catch (error) {
+    console.error('Error in PUT /api/radio-units/:session_id:', error);
     res.status(400).json({ error: error.message });
   }
 });
@@ -725,11 +881,11 @@ router.put('/:session_id/unit/:unit_index', async (req, res) => {
     const index = parseInt(unit_index);
     
     // Validate radio unit data
-    try {
-      validateRadioUnitData(radioUnitData);
-    } catch (error) {
-      return res.status(400).json({ error: error.message });
-    }
+    // try {
+    //   validateRadioUnitData(radioUnitData);
+    // } catch (error) {
+    //   return res.status(400).json({ error: error.message });
+    // }
     
     let radioUnitsRecord = await RadioUnits.findOne({
       where: { session_id }

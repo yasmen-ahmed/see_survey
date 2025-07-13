@@ -110,7 +110,7 @@ const NewRadioUnits = sequelize.define('NewRadioUnits', {
   
   // DC power configuration
   dc_power_source: {
-    type: DataTypes.ENUM('Direct from rectifier distribution', 'New FPFH', 'Existing FPFH', 'Existing DC PDU (not FPFH)'),
+    type: DataTypes.STRING,
     allowNull: true
   },
   

@@ -36,7 +36,24 @@ class AntennaImageService {
     await this.ensureUploadDirectory();
     const stored = this.generateUniqueFilename(file.originalname);
     const filePath = path.join(this.uploadDir, stored);
-    await fs.writeFile(filePath, file.buffer);
+    
+    // Handle both buffer and file path cases
+    if (file.buffer) {
+      await fs.writeFile(filePath, file.buffer);
+    } else if (file.path) {
+      // If multer saved the file to disk, move it to the final location
+      const tempPath = file.path;
+      try {
+        await fs.rename(tempPath, filePath);
+      } catch (err) {
+        // If rename fails (e.g., across devices), fallback to copy
+        await fs.copyFile(tempPath, filePath);
+        await fs.unlink(tempPath); // Clean up temp file
+      }
+    } else {
+      throw new Error('Invalid file format: no buffer or path found');
+    }
+
     return { 
       originalName: file.originalname, 
       stored, 

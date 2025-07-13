@@ -77,6 +77,7 @@ const exportRoutes = require('./routes/exportRoutes');
 // Health & Safety routes
 const healthSafetySiteAccessRoutes = require('./routes/healthSafetySiteAccessRoutes');
 const healthSafetyBTSAccessRoutes = require('./routes/healthSafetyBTSAccessRoutes');
+const newMWRoutes = require('./routes/newMWRoutes')
 
 // Define Sequelize model associations
 const User = require('./models/User');
@@ -99,7 +100,8 @@ const NewGPS = require('./models/NewGPS');
 const HealthSafetySiteAccess = require('./models/HealthSafetySiteAccess');
 const HealthSafetyBTSAccess = require('./models/HealthSafetyBTSAccess');
 const MWAntennasImages = require('./models/MWAntennasImages');
-
+const NewMW = require('./models/NewMW');
+const NewMWImage = require('./models/NewMWImage');
 // Load AC Connection associations
 require('./models/associations');
 
@@ -133,6 +135,12 @@ NewRadioInstallations.hasOne(NewFPFHs, { foreignKey: 'session_id', sourceKey: 's
 NewFPFHs.belongsTo(NewRadioInstallations, { foreignKey: 'session_id', targetKey: 'session_id', constraints: false });
 Survey.hasOne(NewGPS, { foreignKey: 'session_id', sourceKey: 'session_id', as: 'newGPS', constraints: false });
 NewGPS.belongsTo(Survey, { foreignKey: 'session_id', targetKey: 'session_id', constraints: false });
+
+// New MW associations
+Survey.hasMany(NewMW, { foreignKey: 'session_id', sourceKey: 'session_id', as: 'newMW', constraints: false });
+NewMW.belongsTo(Survey, { foreignKey: 'session_id', targetKey: 'session_id', constraints: false });
+NewMW.hasMany(NewMWImage, { foreignKey: 'session_id', sourceKey: 'session_id', as: 'newMWImages', constraints: false });
+NewMWImage.belongsTo(NewMW, { foreignKey: 'session_id', targetKey: 'session_id', constraints: false });
 // Health & Safety associations
 Survey.hasOne(HealthSafetySiteAccess, { foreignKey: 'session_id', sourceKey: 'session_id', as: 'healthSafetySiteAccess', constraints: false });
 HealthSafetySiteAccess.belongsTo(Survey, { foreignKey: 'session_id', targetKey: 'session_id', constraints: false });
@@ -169,6 +177,7 @@ app.use('/api/export', exportRoutes);
 // Health & Safety route registrations
 app.use('/api/health-safety-site-access', healthSafetySiteAccessRoutes);
 app.use('/api/health-safety-bts-access', healthSafetyBTSAccessRoutes);
+app.use('/api/new-mw', newMWRoutes);
 
 app.get('/', (req, res) => {
   res.send('Backend is running!');

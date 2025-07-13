@@ -1,4 +1,5 @@
 const fs = require('fs').promises;
+const fsSync = require('fs'); // For createReadStream
 const path = require('path');
 const crypto = require('crypto');
 const AntennaStructureImages = require('../models/AntennaStructureImages');
@@ -67,8 +68,16 @@ class AntennaStructureImageService {
     await this.ensureUploadDirectory();
     const filePath = path.join(this.uploadDir, storedFilename);
     
-    // Save file
-    await fs.writeFile(filePath, file.buffer);
+    if (file.buffer) {
+      // Memory storage: write buffer directly
+      await fs.writeFile(filePath, file.buffer);
+    } else if (file.path) {
+      // Disk storage: move file from temp location
+      await fs.copyFile(file.path, filePath);
+      await fs.unlink(file.path); // Remove temp file
+    } else {
+      throw new Error('No file buffer or path found on uploaded file');
+    }
     
     // Generate URL (relative to server)
     const fileUrl = `/uploads/antenna_structure/${storedFilename}`;

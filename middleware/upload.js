@@ -22,6 +22,12 @@ const getUploadConfig = (fieldname) => {
       directory: 'new_antennas',
       prefix: 'new_antenna_'
     };
+  } else if (normalizedField.startsWith('mw_')) {
+    // New MW images
+    return {
+      directory: 'new_mw',
+      prefix: 'mw_'
+    };
   }
   
   // Default case
@@ -34,8 +40,14 @@ const getUploadConfig = (fieldname) => {
 // Configure multer for disk storage
 const storage = multer.diskStorage({
   destination: function (req, file, cb) {
+    // For antenna images, use the antenna_images directory
+    let uploadDir;
+    if (file.fieldname.startsWith('antenna_')) {
+      uploadDir = path.join(__dirname, '../uploads/antenna_images');
+    } else {
     const { directory } = getUploadConfig(file.fieldname);
-    const uploadDir = path.join(__dirname, '../uploads', directory);
+      uploadDir = path.join(__dirname, '../uploads', directory);
+    }
     
     // Create directory if it doesn't exist
     fs.mkdirSync(uploadDir, { recursive: true });
@@ -43,9 +55,16 @@ const storage = multer.diskStorage({
     cb(null, uploadDir);
   },
   filename: function (req, file, cb) {
+    // For antenna images, use a specific naming convention
+    if (file.fieldname.startsWith('antenna_')) {
+      const timestamp = Date.now();
+      const uniqueSuffix = Math.round(Math.random() * 1E9);
+      cb(null, `antenna_${timestamp}_${uniqueSuffix}${path.extname(file.originalname)}`);
+    } else {
     const { prefix } = getUploadConfig(file.fieldname);
     const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
     cb(null, prefix + uniqueSuffix + path.extname(file.originalname));
+    }
   }
 });
 
@@ -90,7 +109,6 @@ const imageCategories = [
   'cables_route_photo_from_tower_top_2',
   'general_structure_photo',
   'custom_photo',
-  // AC Connection categories
   'generator_photo',
   'ac_panel_photo',
   'power_meter_photo'
@@ -196,10 +214,60 @@ const uploadAnyWithErrorHandling = (req, res, next) => {
   });
 };
 
+// MW image fields for new MW form
+const mwImageFields = [];
+for (let i = 1; i <= 5; i++) {
+  mwImageFields.push({ name: `mw_${i}_front`, maxCount: 1 });
+  mwImageFields.push({ name: `mw_${i}_idulocation_optional`, maxCount: 1 });
+  mwImageFields.push({ name: `mw_${i}_odu_proposed`, maxCount: 1 });
+  mwImageFields.push({ name: `mw_${i}_odu_location_optional`, maxCount: 1 });
+}
+
+const uploadMWImagesBase = multer({ storage, fileFilter }).fields(mwImageFields);
+
+const uploadMWImagesWithErrorHandling = (req, res, next) => {
+  uploadMWImagesBase(req, res, (err) => {
+    if (err instanceof multer.MulterError) {
+      if (err.code === 'LIMIT_FILE_SIZE') {
+        return res.status(400).json({ 
+          success: false,
+          error: 'One or more files too large. Maximum size is 10MB per file' 
+        });
+      }
+      if (err.code === 'LIMIT_FILE_COUNT') {
+        return res.status(400).json({ 
+          success: false,
+          error: 'Too many files uploaded for one or more fields' 
+        });
+      }
+      if (err.code === 'LIMIT_UNEXPECTED_FILE') {
+        return res.status(400).json({ 
+          success: false,
+          error: 'Unexpected field name in file upload' 
+        });
+      }
+      return res.status(400).json({ 
+        success: false,
+        error: `Upload error: ${err.message}` 
+      });
+    }
+    
+    if (err) {
+      return res.status(400).json({ 
+        success: false,
+        error: err.message 
+      });
+    }
+    
+    next();
+  });
+};
+
 module.exports = {
   uploadSingle: uploadSingleWithErrorHandling,
   uploadMultiple: uploadMultipleWithErrorHandling,
   upload, // Raw multer instance if needed
   imageCategories, // Export categories for use in routes
   uploadAnyWithErrorHandling,
+  uploadMWImages: uploadMWImagesWithErrorHandling
 }; 
