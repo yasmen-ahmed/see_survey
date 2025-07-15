@@ -34,4 +34,9 @@ const Company = sequelize.define('Company', {
   ]
 });
 
+// Define associations
+Company.associate = (models) => {
+  Company.belongsTo(models.Project, { foreignKey: 'project_id', as: 'project' });
+};
+
 module.exports = Company; 

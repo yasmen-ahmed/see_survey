@@ -38,10 +38,16 @@ router.get('/:sessionId', async (req, res) => {
 // PUT update MWs and images
 router.put('/:sessionId', uploadMWImages, async (req, res) => {
   try {
+    console.log('PUT /api/new-mw/:sessionId - Request received');
+    console.log('Session ID:', req.params.sessionId);
+    console.log('Body keys:', Object.keys(req.body));
+    console.log('Files:', req.files ? Object.keys(req.files) : 'No files');
+    
     let data = await NewMWService.saveMWsWithImages(req.params.sessionId, req.body, req.files);
     data = attachAbsoluteUrls(data, req);
     res.json({ success: true, data });
   } catch (err) {
+    console.error('Error in PUT /api/new-mw/:sessionId:', err);
     res.status(500).json({ success: false, error: err.message });
   }
 });

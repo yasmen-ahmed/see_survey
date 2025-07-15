@@ -77,7 +77,8 @@ const exportRoutes = require('./routes/exportRoutes');
 // Health & Safety routes
 const healthSafetySiteAccessRoutes = require('./routes/healthSafetySiteAccessRoutes');
 const healthSafetyBTSAccessRoutes = require('./routes/healthSafetyBTSAccessRoutes');
-const newMWRoutes = require('./routes/newMWRoutes')
+const newMWRoutes = require('./routes/newMWRoutes');
+const hierarchicalDataRoutes = require('./routes/hierarchicalDataRoutes');
 
 // Define Sequelize model associations
 const User = require('./models/User');
@@ -102,6 +103,12 @@ const HealthSafetyBTSAccess = require('./models/HealthSafetyBTSAccess');
 const MWAntennasImages = require('./models/MWAntennasImages');
 const NewMW = require('./models/NewMW');
 const NewMWImage = require('./models/NewMWImage');
+// Hierarchical models for MU -> Country -> CT -> Project -> Company
+const MU = require('./models/MU');
+const Country = require('./models/Country');
+const CT = require('./models/CT');
+const Project = require('./models/Project');
+const Company = require('./models/Company');
 // Load AC Connection associations
 require('./models/associations');
 
@@ -147,6 +154,16 @@ HealthSafetySiteAccess.belongsTo(Survey, { foreignKey: 'session_id', targetKey: 
 Survey.hasOne(HealthSafetyBTSAccess, { foreignKey: 'session_id', sourceKey: 'session_id', as: 'healthSafetyBTSAccess', constraints: false });
 HealthSafetyBTSAccess.belongsTo(Survey, { foreignKey: 'session_id', targetKey: 'session_id', constraints: false });
 
+// Hierarchical associations: MU -> Country -> CT -> Project -> Company
+MU.hasMany(Country, { foreignKey: 'mu_id', as: 'countries' });
+Country.belongsTo(MU, { foreignKey: 'mu_id', as: 'mu' });
+Country.hasMany(CT, { foreignKey: 'country_id', as: 'cts' });
+CT.belongsTo(Country, { foreignKey: 'country_id', as: 'country' });
+CT.hasMany(Project, { foreignKey: 'ct_id', as: 'projects' });
+Project.belongsTo(CT, { foreignKey: 'ct_id', as: 'ct' });
+Project.hasMany(Company, { foreignKey: 'project_id', as: 'companies' });
+Company.belongsTo(Project, { foreignKey: 'project_id', as: 'project' });
+
 app.use('/api/sites', siteLocationRoutes);
 app.use('/api/users', userRoutes);
 app.use('/api/auth', authRoutes);
@@ -178,6 +195,7 @@ app.use('/api/export', exportRoutes);
 app.use('/api/health-safety-site-access', healthSafetySiteAccessRoutes);
 app.use('/api/health-safety-bts-access', healthSafetyBTSAccessRoutes);
 app.use('/api/new-mw', newMWRoutes);
+app.use('/api/hierarchical-data', hierarchicalDataRoutes);
 
 app.get('/', (req, res) => {
   res.send('Backend is running!');

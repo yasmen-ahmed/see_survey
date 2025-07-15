@@ -741,6 +741,9 @@ router.put('/:session_id', radioUnitUpload.any(), async (req, res) => {
     
     const { radio_unit_count, radio_units } = radioUnitsData;
     
+    console.log('Received radio_unit_count:', radio_unit_count);
+    console.log('Received radio_units length:', radio_units ? radio_units.length : 0);
+    
     // Validate basic fields
     if (radio_unit_count && (radio_unit_count < 1 || radio_unit_count > 20)) {
       return res.status(400).json({ error: 'Radio unit count must be between 1 and 20' });
