@@ -34,12 +34,19 @@ class NewMWService {
   }
 
   static async saveMWsWithImages(sessionId, body, files) {
+    console.log('NewMWService.saveMWsWithImages called');
+    console.log('Session ID:', sessionId);
+    console.log('Body:', body);
+    console.log('Files:', files);
+    
     // Parse fields (assume body.fields is a JSON string with all MWs)
     let mwData = [];
     if (body && body.fields) {
       try {
         mwData = JSON.parse(body.fields);
+        console.log('Parsed MW data:', mwData);
       } catch (err) {
+        console.error('JSON parsing error:', err);
         // If JSON parsing fails, throw a descriptive error
         throw new Error('Invalid JSON in fields payload');
       }
@@ -62,7 +69,7 @@ class NewMWService {
       for (const [field, fileArr] of Object.entries(files)) {
         for (const file of fileArr) {
           // Parse mw_index from field name, e.g., mw_1_front
-          const match = field.match(/mw_(\\d+)_/);
+          const match = field.match(/mw_(\d+)_/);
           const mw_index = match ? parseInt(match[1], 10) : 1;
 
           // Determine file URL relative path (keeping same directory structure as upload middleware)

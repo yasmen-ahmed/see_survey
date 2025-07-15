@@ -22,4 +22,9 @@ const MU = sequelize.define('MU', {
   timestamps: true
 });
 
+// Define associations
+MU.associate = (models) => {
+  MU.hasMany(models.Country, { foreignKey: 'mu_id', as: 'countries' });
+};
+
 module.exports = MU; 
