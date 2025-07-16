@@ -72,7 +72,7 @@ const getDefaultAntennaStructure = () => ({
 // Helper function to create default response structure
 const getDefaultResponseStructure = (sessionId, cabinetCount = 0) => ({
   session_id: sessionId,
-  antenna_count: 0,
+  antenna_count: 1,
   antennas: [],
   created_at: null,
   updated_at: null,

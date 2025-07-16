@@ -96,7 +96,7 @@ class AntennaConfigurationService {
         // Create default record if none exists
         record = await AntennaConfiguration.create({
           session_id: sessionId,
-          antenna_count: 0,
+          antenna_count: 1,
           antennas: []
         });
       }
@@ -137,7 +137,7 @@ class AntennaConfigurationService {
     return {
       session_id: data.session_id,
       numberOfCabinets: await this.getCabinetCount(data.session_id),
-      antenna_count: data.antenna_count || antennas.length,
+      antenna_count: Math.max(1, data.antenna_count || antennas.length),
       antennas: antennas,
       metadata: {
         created_at: data.created_at,
