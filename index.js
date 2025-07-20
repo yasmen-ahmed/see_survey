@@ -81,6 +81,7 @@ const healthSafetySiteAccessRoutes = require('./routes/healthSafetySiteAccessRou
 const healthSafetyBTSAccessRoutes = require('./routes/healthSafetyBTSAccessRoutes');
 const newMWRoutes = require('./routes/newMWRoutes');
 const hierarchicalDataRoutes = require('./routes/hierarchicalDataRoutes');
+const radioUnitsCatalogRoutes = require('./routes/radioUnitsCatalogRoutes');
 
 // Define Sequelize model associations
 const User = require('./models/User');
@@ -198,6 +199,7 @@ app.use('/api/health-safety-site-access', healthSafetySiteAccessRoutes);
 app.use('/api/health-safety-bts-access', healthSafetyBTSAccessRoutes);
 app.use('/api/new-mw', newMWRoutes);
 app.use('/api/hierarchical-data', hierarchicalDataRoutes);
+app.use('/api/radio-units-catalog', radioUnitsCatalogRoutes);
 
 app.get('/', (req, res) => {
   res.send('Backend is running!');

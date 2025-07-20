@@ -7,6 +7,12 @@ const NewRadioUnitsImages = require('../models/NewRadioUnitsImages');
 const NewRadioInstallations = require('../models/NewRadioInstallations');
 const { uploadAnyWithErrorHandling } = require('../middleware/upload');
 
+// Add basic request logging
+router.use((req, res, next) => {
+  console.log(`[Radio Units] ${req.method} ${req.path} - ${new Date().toISOString()}`);
+  next();
+});
+
 // Simple data converter for database compatibility (no validation)
 const convertDataForDB = (data) => {
   const converted = { ...data };
@@ -165,6 +171,9 @@ router.get('/:session_id', async (req, res) => {
   try {
     const { session_id } = req.params;
     
+    console.log('=== Radio Units GET Request Debug ===');
+    console.log('Session ID:', session_id);
+    
     const [newRadioUnitsPlanned, existingRadioUnits] = await Promise.all([
       getNewRadioUnitsPlanned(session_id),
       NewRadioUnits.findAll({
@@ -173,19 +182,29 @@ router.get('/:session_id', async (req, res) => {
       })
     ]);
 
+    console.log('New radio units planned:', newRadioUnitsPlanned);
+    console.log('Existing radio units found:', existingRadioUnits.length);
+    console.log('Raw existing radio units:', existingRadioUnits.map(u => ({ id: u.id, radio_unit_index: u.radio_unit_index })));
+
     const formattedRadioUnits = await Promise.all(
       existingRadioUnits.map(unit => 
         formatRadioUnitData(unit, session_id, unit.radio_unit_index)
       )
     );
 
-    res.json({
+    console.log('Formatted radio units:', formattedRadioUnits.length);
+
+    const response = {
       session_id,
       new_radio_units_planned: newRadioUnitsPlanned,
       radio_units: formattedRadioUnits,
       total_radio_units: formattedRadioUnits.length
-    });
+    };
+
+    console.log('GET response:', response);
+    res.json(response);
   } catch (error) {
+    console.error('Error in GET route:', error);
     res.status(500).json({ error: error.message });
   }
 });
@@ -259,9 +278,15 @@ router.post('/:session_id/:radio_unit_index', async (req, res) => {
 
 // PUT /api/new-radio-units/:session_id
 router.put('/:session_id', uploadAnyWithErrorHandling, async (req, res) => {
+  console.log('=== Radio Units PUT Route Entered ===');
   try {
     const { session_id } = req.params;
     let updateData = req.body;
+    
+    console.log('=== Radio Units PUT Request Debug ===');
+    console.log('Session ID:', session_id);
+    console.log('Raw request body:', req.body);
+    console.log('Files:', req.files ? req.files.length : 0);
     
     // Handle multipart/form-data format (when uploading files)
     if (req.files && req.files.length > 0) {
@@ -269,7 +294,9 @@ router.put('/:session_id', uploadAnyWithErrorHandling, async (req, res) => {
       if (updateData.data && typeof updateData.data === 'string') {
         try {
           updateData = JSON.parse(updateData.data);
+          console.log('Parsed data from form:', updateData);
         } catch (error) {
+          console.error('Error parsing JSON data:', error);
           return res.status(400).json({
             error: 'Invalid JSON format in data field'
           });
@@ -277,9 +304,13 @@ router.put('/:session_id', uploadAnyWithErrorHandling, async (req, res) => {
       }
     }
 
+    console.log('Final updateData:', updateData);
     const radioUnitsArray = updateData.radio_units || [];
+    console.log('Radio units array:', radioUnitsArray);
+    console.log('Array length:', radioUnitsArray.length);
 
     if (!Array.isArray(radioUnitsArray)) {
+      console.error('radio_units is not an array:', typeof radioUnitsArray);
       return res.status(400).json({ error: 'Request body must contain a radio_units array' });
     }
 
@@ -290,9 +321,13 @@ router.put('/:session_id', uploadAnyWithErrorHandling, async (req, res) => {
       const radioUnitData = radioUnitsArray[i];
       const radioUnitIndex = radioUnitData.radio_unit_index || (i + 1);
 
+      console.log(`Processing radio unit ${i + 1}:`, radioUnitData);
+      console.log(`Radio unit index: ${radioUnitIndex}`);
+
       try {
         // Convert data for database compatibility
         const convertedData = convertDataForDB(radioUnitData);
+        console.log(`Converted data for radio unit ${radioUnitIndex}:`, convertedData);
        
         // Check if radio unit exists
         let radioUnit = await NewRadioUnits.findOne({
@@ -302,9 +337,12 @@ router.put('/:session_id', uploadAnyWithErrorHandling, async (req, res) => {
           }
         });
 
+        console.log(`Existing radio unit found:`, !!radioUnit);
+
         if (radioUnit) {
           // Update existing radio unit
           await radioUnit.update(convertedData);
+          console.log(`Updated radio unit ${radioUnitIndex}`);
         } else {
           // Create new radio unit
           radioUnit = await NewRadioUnits.create({
@@ -312,6 +350,7 @@ router.put('/:session_id', uploadAnyWithErrorHandling, async (req, res) => {
             radio_unit_index: radioUnitIndex,
             ...convertedData
           });
+          console.log(`Created new radio unit ${radioUnitIndex}:`, radioUnit.id);
         }
 
         results.push({
@@ -320,6 +359,7 @@ router.put('/:session_id', uploadAnyWithErrorHandling, async (req, res) => {
           data: await formatRadioUnitData(radioUnit, session_id, radioUnitIndex)
         });
       } catch (error) {
+        console.error(`Error processing radio unit ${radioUnitIndex}:`, error);
         results.push({
           radio_unit_index: radioUnitIndex,
           status: 'error',
@@ -422,6 +462,8 @@ router.put('/:session_id', uploadAnyWithErrorHandling, async (req, res) => {
       results
     };
     
+    console.log('Final response results:', results);
+    
     if (imageResults.length > 0) {
       response.images_processed = {
         total: imageResults.length,
@@ -441,6 +483,7 @@ router.put('/:session_id', uploadAnyWithErrorHandling, async (req, res) => {
       response.message += imageMessage;
     }
 
+    console.log('Sending response:', response);
     res.json(response);
   } catch (error) {
     console.error('Error in radio units update:', error);
@@ -669,4 +712,19 @@ router.get('/:session_id/config', async (req, res) => {
 });
 
 module.exports = router; 
+
+// Add a catch-all error handler for this router
+router.use((error, req, res, next) => {
+  console.error('=== Radio Units Router Error ===');
+  console.error('Error:', error);
+  console.error('Request method:', req.method);
+  console.error('Request path:', req.path);
+  console.error('Request body:', req.body);
+  console.error('Stack trace:', error.stack);
+  
+  res.status(500).json({ 
+    error: 'Internal server error in radio units router',
+    message: error.message 
+  });
+}); 
 
