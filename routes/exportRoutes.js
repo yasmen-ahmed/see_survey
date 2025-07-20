@@ -45,6 +45,17 @@ router.get('/site/:session_id', async (req, res) => {
       locSheet.getCell('H7').value = antennaStructure['antenna_structure_data']['rt_building_height'] || '';
       locSheet.getCell('Q7').value = areaInfo['other_telecom_operator_exist_onsite'] || '';
       locSheet.getCell('W7').value = areaInfo['site_ownership'] || '';
+      locSheet.getCell('I9').value = siteImages['image_category']['site_entrance'] || '' // need to check the image dimensions
+      locSheet.getCell('G212').value = areaInfo['location_of_existing_telecom_racks_cabinets'] || '';
+      locSheet.getCell('G235').value = areaInfo['location_of_planned_new_telecom_racks_cabinets'] || '';
+      locSheet.getCell('J80').value = newRadioInstallations['new_radio_units_planned'] || '';
+      locSheet.getCell('O89').value = newRadioUnits['connected_to_antenna'] || '';
+      locSheet.getCell('O113').value = newAntennas['new_or_swap'] || '';
+      locSheet.getCell('I117').value = newAntennas['azimuth_angle_shift'] || '';
+      locSheet.getCell('M117').Value = newAntennas['base_height_from_tower']||'';
+      locSheet.getCell('M117').Value = newAntennas['antenna_technology']||'';
+      locSheet.getCell('J119').Value = newAntennas['side_arm_type']||'';
+      locSheet.getCell('L123').value = newRadioUnits['fiber_cable_length'] || '';
       // ...fill other cells as needed
     }
 
