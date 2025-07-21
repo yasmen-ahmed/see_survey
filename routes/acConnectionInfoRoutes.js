@@ -81,25 +81,48 @@ router.route('/:session_id')
         updateData = req.body;
       }
       
-      // Get the image file if it exists
-      const imageFile = req.files?.find(f => f.fieldname === 'generator_photo');
+      // Handle multiple image files
+      const imageFiles = req.files || [];
       
-      // Validate that either file or body data is present
-      if (!imageFile && (!updateData || Object.keys(updateData).length === 0)) {
+      // Validate that either files or body data is present
+      if (imageFiles.length === 0 && (!updateData || Object.keys(updateData).length === 0)) {
         return res.status(400).json({
           success: false,
           error: {
             type: 'INVALID_REQUEST',
-            message: 'Request must include either form data or an image file'
+            message: 'Request must include either form data or image files'
           }
         });
       }
       
-      const data = await AcConnectionService.getOrCreateBySessionId(
+      // Process data first
+      let data = await AcConnectionService.getOrCreateBySessionId(
         session_id,
         Object.keys(updateData).length > 0 ? updateData : null,
-        imageFile
+        null
       );
+      
+      // Process each image file
+      if (imageFiles.length > 0) {
+        for (const imageFile of imageFiles) {
+          try {
+            data = await AcConnectionService.getOrCreateBySessionId(
+              session_id,
+              null,
+              imageFile
+            );
+          } catch (imageError) {
+            console.error(`Error processing image ${imageFile.fieldname}:`, imageError);
+            return res.status(400).json({
+              success: false,
+              error: {
+                type: 'IMAGE_PROCESSING_ERROR',
+                message: `Failed to process image ${imageFile.fieldname}: ${imageError.message}`
+              }
+            });
+          }
+        }
+      }
       
       res.json({
         success: true,
