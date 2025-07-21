@@ -12,7 +12,9 @@ const IMAGE_CATEGORIES = [
   'site_name_shelter',
   'crane_access_street',
   'crane_location',
-  'site_environment'
+  'site_environment',
+  'site_map_snapshot',
+          'site_id_picture'
 ];
 
 // Get all images for a session
@@ -66,6 +68,15 @@ router.put('/:session_id', uploadAnyWithErrorHandling, async (req, res) => {
     const imageResults = [];
     let hasImageUploadFailures = false;
 
+    // if (!req.files || req.files.length === 0) {
+    //   console.log('No files received in request');
+    //   return res.status(400).json({
+    //     success: false,
+    //     error: 'No files received'
+    //   });
+    // }
+
+    // Check if files exist before processing
     // if (!req.files || req.files.length === 0) {
     //   console.log('No files received in request');
     //   return res.status(400).json({

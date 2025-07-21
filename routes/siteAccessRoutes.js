@@ -25,7 +25,16 @@ router.get('/:session_id', async (req, res) => {
         keys_required: '',
         material_accessibility_to_site: '',
         contact_person_name_for_site_key: '',
-        contact_tel_number_for_site_key: ''
+        contact_tel_number_for_site_key: '',
+        // New access problems fields
+        environment_cultural_problems: '',
+        environment_cultural_problems_details: '',
+        aviation_problems: '',
+        aviation_problems_details: '',
+        military_problems: '',
+        military_problems_details: '',
+        why_crane_needed: '',
+        need_crane_permission: ''
       });
     }
     const result = entry.toJSON();

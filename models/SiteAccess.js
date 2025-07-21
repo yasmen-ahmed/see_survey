@@ -22,7 +22,16 @@ const SiteAccess = sequelize.define('SiteAccess', {
   keys_required: { type: DataTypes.STRING, defaultValue: '' },
   material_accessibility_to_site: { type: DataTypes.STRING, defaultValue: '' },
   contact_person_name_for_site_key: { type: DataTypes.STRING, defaultValue: '' },
-  contact_tel_number_for_site_key: { type: DataTypes.STRING, defaultValue: '' }
+  contact_tel_number_for_site_key: { type: DataTypes.STRING, defaultValue: '' },
+  // New access problems fields
+  environment_cultural_problems: { type: DataTypes.STRING, defaultValue: '' },
+  environment_cultural_problems_details: { type: DataTypes.TEXT, defaultValue: '' },
+  aviation_problems: { type: DataTypes.STRING, defaultValue: '' },
+  aviation_problems_details: { type: DataTypes.TEXT, defaultValue: '' },
+  military_problems: { type: DataTypes.STRING, defaultValue: '' },
+  military_problems_details: { type: DataTypes.TEXT, defaultValue: '' },
+  why_crane_needed: { type: DataTypes.TEXT, defaultValue: '' },
+  need_crane_permission: { type: DataTypes.STRING, defaultValue: '' }
 }, {
   tableName: 'site_access',
   timestamps: false
