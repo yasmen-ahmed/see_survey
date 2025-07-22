@@ -311,9 +311,13 @@ router.put('/:session_id', uploadAnyWithErrorHandling, async (req, res) => {
       const antennaData = antennasArray[i];
       const antennaIndex = antennaData.antenna_index || (i + 1);
 
+      console.log(`Processing antenna ${antennaIndex}:`, antennaData); // Debug log
+
       try {
         // Validate antenna data
+        console.log(`Validating antenna ${antennaIndex}...`); // Debug log
         validateNewAntennaData(antennaData);
+        console.log(`Validation passed for antenna ${antennaIndex}`); // Debug log
 
         // Check if antenna exists
         let antenna = await NewAntennas.findOne({
@@ -325,9 +329,11 @@ router.put('/:session_id', uploadAnyWithErrorHandling, async (req, res) => {
 
         if (antenna) {
           // Update existing antenna
+          console.log(`Updating existing antenna ${antennaIndex}`); // Debug log
           await antenna.update(antennaData);
         } else {
           // Create new antenna
+          console.log(`Creating new antenna ${antennaIndex}`); // Debug log
           antenna = await NewAntennas.create({
             session_id,
             antenna_index: antennaIndex,
@@ -341,6 +347,7 @@ router.put('/:session_id', uploadAnyWithErrorHandling, async (req, res) => {
           data: await formatAntennaData(antenna, session_id, antennaIndex)
         });
       } catch (error) {
+        console.log(`Error processing antenna ${antennaIndex}:`, error.message); // Debug log
         results.push({
           antenna_index: antennaIndex,
           status: 'error',

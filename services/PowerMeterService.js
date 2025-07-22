@@ -33,7 +33,8 @@ class PowerMeterService {
           meter_reading: null,
           ac_power_source_type: null,
           power_cable_config: null,
-          main_cb_config: null
+          main_cb_config: null,
+          electrical_measurements: null
         });
         // Reload to get associations
         record = await PowerMeter.findOne({
@@ -174,7 +175,8 @@ class PowerMeterService {
       meter_reading: data.meter_reading || null,
       ac_power_source_type: data.ac_power_source_type || null,
       power_cable_config: null,
-      main_cb_config: null
+      main_cb_config: null,
+      electrical_measurements: null
     };
     
     // Process power cable configuration
@@ -185,6 +187,11 @@ class PowerMeterService {
     // Process main CB configuration
     if (data.main_cb_config) {
       processed.main_cb_config = this.processMainCBConfig(data.main_cb_config);
+    }
+    
+    // Process electrical measurements
+    if (data.electrical_measurements) {
+      processed.electrical_measurements = this.processElectricalMeasurements(data.electrical_measurements);
     }
     
     return processed;
@@ -240,6 +247,32 @@ class PowerMeterService {
   }
   
   /**
+   * Process electrical measurements
+   */
+  static processElectricalMeasurements(electricalData) {
+    const config = {};
+    
+    const validFields = [
+      'existing_phase_1_voltage', 'existing_phase_2_voltage', 'existing_phase_3_voltage',
+      'existing_phase_1_current', 'existing_phase_2_current', 'existing_phase_3_current',
+      'sharing_phase_1_current', 'sharing_phase_2_current', 'sharing_phase_3_current',
+      'phase_to_phase_l1_l2', 'phase_to_phase_l1_l3', 'phase_to_phase_l2_l3',
+      'earthing_to_neutral_voltage'
+    ];
+    
+    validFields.forEach(field => {
+      if (electricalData[field] !== undefined && electricalData[field] !== null) {
+        const value = parseFloat(electricalData[field]);
+        if (!isNaN(value) && value >= 0) {
+          config[field] = value;
+        }
+      }
+    });
+    
+    return Object.keys(config).length > 0 ? config : null;
+  }
+  
+  /**
    * Transform database record to API response format
    */
   static transformToApiResponse(record) {
@@ -257,6 +290,21 @@ class PowerMeterService {
       main_cb_config: data.main_cb_config || {
         rating: null,
         type: null
+      },
+      electrical_measurements: data.electrical_measurements || {
+        existing_phase_1_voltage: null,
+        existing_phase_2_voltage: null,
+        existing_phase_3_voltage: null,
+        existing_phase_1_current: null,
+        existing_phase_2_current: null,
+        existing_phase_3_current: null,
+        sharing_phase_1_current: null,
+        sharing_phase_2_current: null,
+        sharing_phase_3_current: null,
+        phase_to_phase_l1_l2: null,
+        phase_to_phase_l1_l3: null,
+        phase_to_phase_l2_l3: null,
+        earthing_to_neutral_voltage: null
       },
       images: data.images || [],
       metadata: {
@@ -281,6 +329,21 @@ class PowerMeterService {
       main_cb_config: {
         rating: null,
         type: null
+      },
+      electrical_measurements: {
+        existing_phase_1_voltage: null,
+        existing_phase_2_voltage: null,
+        existing_phase_3_voltage: null,
+        existing_phase_1_current: null,
+        existing_phase_2_current: null,
+        existing_phase_3_current: null,
+        sharing_phase_1_current: null,
+        sharing_phase_2_current: null,
+        sharing_phase_3_current: null,
+        phase_to_phase_l1_l2: null,
+        phase_to_phase_l1_l3: null,
+        phase_to_phase_l2_l3: null,
+        earthing_to_neutral_voltage: null
       },
       images: [],
       metadata: {
