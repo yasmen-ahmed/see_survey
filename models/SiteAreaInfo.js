@@ -12,6 +12,7 @@ const SiteAreaInfo = sequelize.define('SiteAreaInfo', {
   site_ownership: { type: DataTypes.STRING, defaultValue: '' }, // radio
   shared_site: { type: DataTypes.STRING, defaultValue: '' }, // radio
   other_telecom_operator_exist_onsite: { type: DataTypes.STRING, defaultValue: '' }, // checkbox (array as string)
+  other_telecom_operators_exist_onsite: { type: DataTypes.TEXT, defaultValue: null }, // JSON array of operators for MW antennas
   ac_power_sharing: { type: DataTypes.STRING, defaultValue: '' }, // radio
   dc_power_sharing: { type: DataTypes.STRING, defaultValue: '' }, // radio
   site_topology: { type: DataTypes.STRING, defaultValue: '' }, // radio

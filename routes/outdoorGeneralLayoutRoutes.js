@@ -119,6 +119,15 @@ router.route('/:session_id')
           if (req.body.has_site_sketch !== undefined) {
             updateData.has_site_sketch = req.body.has_site_sketch === 'true' || req.body.has_site_sketch === true;
           }
+          if (req.body.distance_from_equipment_to_tower_base !== undefined) {
+            updateData.distance_from_equipment_to_tower_base = parseFloat(req.body.distance_from_equipment_to_tower_base) || 0;
+          }
+          if (req.body.is_earth_bus_bars_connected_to_main_earth_system !== undefined) {
+            updateData.is_earth_bus_bars_connected_to_main_earth_system = req.body.is_earth_bus_bars_connected_to_main_earth_system === 'true' || req.body.is_earth_bus_bars_connected_to_main_earth_system === true;
+          }
+          if (req.body.ac_electrical_sockets !== undefined) {
+            updateData.ac_electrical_sockets = parseInt(req.body.ac_electrical_sockets) || 0;
+          }
         }
       } else {
         // Case 3: Regular JSON request

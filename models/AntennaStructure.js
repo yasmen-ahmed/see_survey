@@ -31,6 +31,16 @@ const AntennaStructure = sequelize.define('AntennaStructure', {
         }
       }
     }
+  },
+  tower_manufacturer: {
+    type: DataTypes.STRING,
+    allowNull: true, // Not mandatory
+    defaultValue: ''
+  },
+  empty_mounts: {
+    type: DataTypes.INTEGER,
+    allowNull: true, // Not mandatory
+    defaultValue: 0
   }
 }, {
   tableName: 'antenna_structure',

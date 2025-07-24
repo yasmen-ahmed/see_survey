@@ -5,6 +5,48 @@ const { uploadAnyWithErrorHandling } = require('../middleware/upload');
 const MWAntennasImageService = require('../services/MWAntennasImageService');
 
 /**
+ * GET /api/mw-antennas/:sessionId/operator-options
+ * Get operator options from Site Information
+ */
+router.get('/:sessionId/operator-options', async (req, res) => {
+  try {
+    const { sessionId } = req.params;
+    
+    // Validate session_id parameter
+    if (!sessionId || sessionId.trim() === '') {
+      return res.status(400).json({
+        success: false,
+        error: {
+          type: 'INVALID_PARAMETER',
+          message: 'session_id is required'
+        }
+      });
+    }
+    
+    const operatorOptions = await MWAntennasService.getOperatorOptions(sessionId);
+    
+    res.json({
+      success: true,
+      data: {
+        session_id: sessionId,
+        operator_options: operatorOptions,
+        total_options: operatorOptions.length,
+        source: 'site_information'
+      }
+    });
+    
+  } catch (error) {
+    console.error('MW Antennas Operator Options Error:', error);
+    
+    const statusCode = error.type === 'VALIDATION_ERROR' ? 400 : 500;
+    res.status(statusCode).json({
+      success: false,
+      error
+    });
+  }
+});
+
+/**
  * GET /api/mw-antennas/:sessionId
  * Get MW antennas data by session ID
  */
@@ -45,37 +87,65 @@ router.put('/:sessionId', uploadAnyWithErrorHandling, async (req, res) => {
     const { sessionId } = req.params;
     let updateData = req.body;
 
-    // Handle multipart/form-data format (when uploading files)
-    if (req.files && req.files.length > 0) {
-      // Parse mwAntennasData from form data if it exists
-      if (updateData.mwAntennasData && typeof updateData.mwAntennasData === 'string') {
-        try {
-          updateData.mwAntennasData = JSON.parse(updateData.mwAntennasData);
-        } catch (error) {
-          return res.status(400).json({
-            success: false,
-            error: { type: 'VALIDATION_ERROR', message: 'Invalid mwAntennasData JSON format' }
-          });
-        }
-      }
+    console.log('=== PUT REQUEST DEBUG ===');
+    console.log('Session ID:', sessionId);
+    console.log('Request body keys:', Object.keys(req.body));
+    console.log('Files present:', req.files ? req.files.length : 0);
+    console.log('Content-Type:', req.get('Content-Type'));
+    console.log('Raw body:', req.body);
 
-      // If no mwAntennasData in form, try to construct it from individual fields
-      if (!updateData.mwAntennasData) {
-        const numAntennas = parseInt(updateData.how_many_mw_antennas_on_tower) || 1;
-        updateData.mwAntennasData = {
-          mw_antennas: []
-        };
-
-        for (let i = 1; i <= numAntennas; i++) {
-          const antenna = {
-            height: parseFloat(updateData[`antenna_${i}_height`]) || 0,
-            diameter: parseFloat(updateData[`antenna_${i}_diameter`]) || 0,
-            azimuth: parseFloat(updateData[`antenna_${i}_azimuth`]) || 0
-          };
-          updateData.mwAntennasData.mw_antennas.push(antenna);
-        }
+    // Parse mwAntennasData from form data if it exists
+    if (updateData.mwAntennasData && typeof updateData.mwAntennasData === 'string') {
+      try {
+        updateData.mwAntennasData = JSON.parse(updateData.mwAntennasData);
+        console.log('Parsed mwAntennasData from string:', updateData.mwAntennasData);
+      } catch (error) {
+        return res.status(400).json({
+          success: false,
+          error: { type: 'VALIDATION_ERROR', message: 'Invalid mwAntennasData JSON format' }
+        });
       }
     }
+
+    // If no mwAntennasData in form, try to construct it from individual fields
+    if (!updateData.mwAntennasData) {
+      const numAntennas = parseInt(updateData.how_many_mw_antennas_on_tower) || 1;
+      updateData.mwAntennasData = {
+        mw_antennas: []
+      };
+
+      console.log('Constructing antenna data from form fields. Number of antennas:', numAntennas);
+
+      for (let i = 0; i < numAntennas; i++) {
+        // Log the raw field values
+        console.log(`\n--- Antenna ${i + 1} Raw Fields ---`);
+        console.log(`height: "${updateData[`mwAntennasData[mw_antennas][${i}][height]`]}"`);
+        console.log(`diameter: "${updateData[`mwAntennasData[mw_antennas][${i}][diameter]`]}"`);
+        console.log(`azimuth: "${updateData[`mwAntennasData[mw_antennas][${i}][azimuth]`]}"`);
+        console.log(`oduLocation: "${updateData[`mwAntennasData[mw_antennas][${i}][oduLocation]`]}"`);
+        console.log(`operator: "${updateData[`mwAntennasData[mw_antennas][${i}][operator]`]}"`);
+        console.log(`farEndSiteId: "${updateData[`mwAntennasData[mw_antennas][${i}][farEndSiteId]`]}"`);
+        console.log(`hopDistance: "${updateData[`mwAntennasData[mw_antennas][${i}][hopDistance]`]}"`);
+        console.log(`linkCapacity: "${updateData[`mwAntennasData[mw_antennas][${i}][linkCapacity]`]}"`);
+        console.log(`actionPlanned: "${updateData[`mwAntennasData[mw_antennas][${i}][actionPlanned]`]}"`);
+
+        const antenna = {
+          height: parseFloat(updateData[`mwAntennasData[mw_antennas][${i}][height]`]) || 0,
+          diameter: parseFloat(updateData[`mwAntennasData[mw_antennas][${i}][diameter]`]) || 0,
+          azimuth: parseFloat(updateData[`mwAntennasData[mw_antennas][${i}][azimuth]`]) || 0,
+          oduLocation: updateData[`mwAntennasData[mw_antennas][${i}][oduLocation]`] || '',
+          operator: updateData[`mwAntennasData[mw_antennas][${i}][operator]`] || '',
+          farEndSiteId: updateData[`mwAntennasData[mw_antennas][${i}][farEndSiteId]`] || '',
+          hopDistance: parseFloat(updateData[`mwAntennasData[mw_antennas][${i}][hopDistance]`]) || 0,
+          linkCapacity: parseFloat(updateData[`mwAntennasData[mw_antennas][${i}][linkCapacity]`]) || 0,
+          actionPlanned: updateData[`mwAntennasData[mw_antennas][${i}][actionPlanned]`] || ''
+        };
+        console.log(`Antenna ${i + 1} processed data:`, antenna);
+        updateData.mwAntennasData.mw_antennas.push(antenna);
+      }
+    }
+    
+    console.log('Final processed update data:', JSON.stringify(updateData, null, 2));
     
     // Validate that we have data to update
     if (!updateData || typeof updateData !== 'object') {

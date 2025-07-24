@@ -88,6 +88,30 @@ const OutdoorGeneralLayout = sequelize.define('OutdoorGeneralLayout', {
     defaultValue: null
   },
   
+  // Distance from equipment to tower base
+  distance_from_equipment_to_tower_base: {
+    type: DataTypes.DECIMAL(10, 2),
+    defaultValue: null,
+    validate: {
+      min: 0
+    }
+  },
+  
+  // Earth bus bars connection to main earth system
+  is_earth_bus_bars_connected_to_main_earth_system: {
+    type: DataTypes.BOOLEAN,
+    defaultValue: null
+  },
+  
+  // AC electrical sockets count
+  ac_electrical_sockets: {
+    type: DataTypes.INTEGER,
+    defaultValue: null,
+    validate: {
+      min: 0
+    }
+  },
+  
  
   // Metadata for tracking
   created_at: {

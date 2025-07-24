@@ -16,7 +16,7 @@ const AntennaStructureImages = sequelize.define('AntennaStructureImages', {
   },
   
   image_category: {
-    type: DataTypes.STRING,
+    type: DataTypes.STRING(500), // Increased length to handle longer category names
     allowNull: false,
     comment: 'Category/type of the antenna structure image'
   },

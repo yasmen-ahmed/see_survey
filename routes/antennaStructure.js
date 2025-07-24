@@ -77,7 +77,7 @@ router.put('/:sessionId', uploadMultiple, async (req, res) => {
 
     // Handle image uploads/replacements if files are provided
     let imageResults = [];
-    if (req.imagesByCategory && Object.keys(req.imagesByCategory).length > 0) {
+    if (req.files && Object.keys(req.files).length > 0) {
       const { description } = req.body;
 
       // Process each category - replace existing image

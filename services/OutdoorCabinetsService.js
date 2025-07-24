@@ -123,7 +123,12 @@ class OutdoorCabinetsService {
         pduFreeCBs: cabinet.pduFreeCBs || '',
         pduCBsRatings: this.processCBRatingsData(cabinet.pduCBsRatings, `Cabinet ${index + 1} PDU`),
         internalLayout: cabinet.internalLayout || '',
-        freeU: this.processNumericField(cabinet.freeU, `Cabinet ${index + 1} free U`)
+        freeU: this.processNumericField(cabinet.freeU, `Cabinet ${index + 1} free U`),
+        airConditionStatus: cabinet.airConditionStatus || '',
+        roxtecInsideCabinet: cabinet.roxtecInsideCabinet || '',
+        roxtecOutsideCabinet: cabinet.roxtecOutsideCabinet || '',
+        roxtecInsideCabinetZoomed: cabinet.roxtecInsideCabinetZoomed || '',
+        roxtecOutsideCabinetZoomed: cabinet.roxtecOutsideCabinetZoomed || ''
       };
       
       return processedCabinet;
@@ -206,7 +211,12 @@ class OutdoorCabinetsService {
       pduFreeCBs: '',
       pduCBsRatings: [],
       internalLayout: '',
-      freeU: null
+      freeU: null,
+      airConditionStatus: '',
+      roxtecInsideCabinet: '',
+      roxtecOutsideCabinet: '',
+      roxtecInsideCabinetZoomed: '',
+      roxtecOutsideCabinetZoomed: ''
     }];
   }
   
@@ -250,7 +260,12 @@ class OutdoorCabinetsService {
           pduFreeCBs: '',
           pduCBsRatings: [],
           internalLayout: '',
-          freeU: null
+          freeU: null,
+          airConditionStatus: '',
+          roxtecInsideCabinet: '',
+          roxtecOutsideCabinet: '',
+          roxtecInsideCabinetZoomed: '',
+          roxtecOutsideCabinetZoomed: ''
         });
       }
     }

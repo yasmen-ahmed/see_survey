@@ -109,8 +109,8 @@ router.route('/:session_id')
             data = await AcConnectionService.getOrCreateBySessionId(
               session_id,
               null,
-              imageFile
-            );
+        imageFile
+      );
           } catch (imageError) {
             console.error(`Error processing image ${imageFile.fieldname}:`, imageError);
             return res.status(400).json({

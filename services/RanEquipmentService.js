@@ -39,7 +39,7 @@ class RanEquipmentService {
     try {
       await this.validateSession(sessionId);
       
-      // Get current number of cabinets from outdoor_cabinets table
+      // Always get current number of cabinets from outdoor_cabinets table
       const numberOfCabinets = await this.getCabinetCount(sessionId);
       
       // Try to find existing record
@@ -52,14 +52,14 @@ class RanEquipmentService {
         const processedData = this.processUpdateData(updateData, numberOfCabinets);
         
         if (record) {
-          // Update existing record
+          // Update existing record with latest cabinet count
           await record.update({
             number_of_cabinets: numberOfCabinets,
             ran_equipment: processedData.ranEquipment
           });
           await record.reload();
         } else {
-          // Create new record
+          // Create new record with latest cabinet count
           record = await RanEquipment.create({
             session_id: sessionId,
             number_of_cabinets: numberOfCabinets,
@@ -67,12 +67,18 @@ class RanEquipmentService {
           });
         }
       } else if (!record) {
-        // Create default record if none exists
+        // Create default record with latest cabinet count
         record = await RanEquipment.create({
           session_id: sessionId,
           number_of_cabinets: numberOfCabinets,
           ran_equipment: this.getDefaultRanEquipment()
         });
+      } else {
+        // Update existing record with latest cabinet count even if no data update
+        await record.update({
+          number_of_cabinets: numberOfCabinets
+        });
+        await record.reload();
       }
       
       return this.transformToApiResponse(record);
@@ -88,11 +94,24 @@ class RanEquipmentService {
   static processUpdateData(data, numberOfCabinets) {
     const processed = {
       ranEquipment: {
+        // Existing fields
         existing_location: data.existing_location || '',
         existing_vendor: this.validateVendor(data.existing_vendor),
         existing_type_model: Array.isArray(data.existing_type_model) ? data.existing_type_model : [],
         new_installation_location: Array.isArray(data.new_installation_location) ? data.new_installation_location : [],
-        length_of_transmission_cable: data.length_of_transmission_cable !== undefined && data.length_of_transmission_cable !== null && data.length_of_transmission_cable !== '' ? parseFloat(data.length_of_transmission_cable) : 0
+        length_of_transmission_cable: data.length_of_transmission_cable !== undefined && data.length_of_transmission_cable !== null && data.length_of_transmission_cable !== '' ? parseFloat(data.length_of_transmission_cable) : 0,
+        // New BTS table fields
+        how_many_base_band_onsite: parseInt(data.how_many_base_band_onsite) || 0,
+        bts_table: Array.isArray(data.bts_table) ? data.bts_table.map(bts => ({
+          base_band_technology: Array.isArray(bts.base_band_technology) ? bts.base_band_technology : [],
+          existing_base_band_located_in_cabinet: bts.existing_base_band_located_in_cabinet || '',
+          base_band_vendor: bts.base_band_vendor || '',
+          base_band_model: bts.base_band_model || '',
+          base_band_status: bts.base_band_status || '',
+          transmission_cable_type: bts.transmission_cable_type || '',
+          length_of_transmission_cable: bts.length_of_transmission_cable !== undefined && bts.length_of_transmission_cable !== null && bts.length_of_transmission_cable !== '' ? parseFloat(bts.length_of_transmission_cable) : 0,
+          backhauling_destination: bts.backhauling_destination || ''
+        })) : []
       }
     };
     return processed;
@@ -116,11 +135,15 @@ class RanEquipmentService {
    */
   static getDefaultRanEquipment() {
     return {
+      // Existing fields
       existing_location: '',
       existing_vendor: '',
       existing_type_model: [],
       new_installation_location: [],
-      length_of_transmission_cable: 0
+      length_of_transmission_cable: 0,
+      // New BTS table fields
+      how_many_base_band_onsite: 0,
+      bts_table: []
     };
   }
   
@@ -166,16 +189,30 @@ class RanEquipmentService {
       ranEquipment = this.getDefaultRanEquipment();
     }
     // Ensure all fields exist
+    const defaultData = this.getDefaultRanEquipment();
     ranEquipment = {
-      existing_location: ranEquipment?.existing_location || '',
-      existing_vendor: ranEquipment?.existing_vendor || '',
-      existing_type_model: Array.isArray(ranEquipment?.existing_type_model) ? ranEquipment.existing_type_model : [],
-      new_installation_location: Array.isArray(ranEquipment?.new_installation_location) ? ranEquipment.new_installation_location : [],
-      length_of_transmission_cable: ranEquipment?.length_of_transmission_cable !== undefined && ranEquipment?.length_of_transmission_cable !== null && ranEquipment?.length_of_transmission_cable !== '' ? parseFloat(ranEquipment.length_of_transmission_cable) : 0
+      // Existing fields
+      existing_location: ranEquipment?.existing_location || defaultData.existing_location,
+      existing_vendor: ranEquipment?.existing_vendor || defaultData.existing_vendor,
+      existing_type_model: Array.isArray(ranEquipment?.existing_type_model) ? ranEquipment.existing_type_model : defaultData.existing_type_model,
+      new_installation_location: Array.isArray(ranEquipment?.new_installation_location) ? ranEquipment.new_installation_location : defaultData.new_installation_location,
+      length_of_transmission_cable: ranEquipment?.length_of_transmission_cable !== undefined && ranEquipment?.length_of_transmission_cable !== null && ranEquipment?.length_of_transmission_cable !== '' ? parseFloat(ranEquipment.length_of_transmission_cable) : defaultData.length_of_transmission_cable,
+      // New BTS table fields
+      how_many_base_band_onsite: ranEquipment?.how_many_base_band_onsite || defaultData.how_many_base_band_onsite,
+      bts_table: Array.isArray(ranEquipment?.bts_table) ? ranEquipment.bts_table.map(bts => ({
+        base_band_technology: Array.isArray(bts.base_band_technology) ? bts.base_band_technology : [],
+        existing_base_band_located_in_cabinet: bts.existing_base_band_located_in_cabinet || '',
+        base_band_vendor: bts.base_band_vendor || '',
+        base_band_model: bts.base_band_model || '',
+        base_band_status: bts.base_band_status || '',
+        transmission_cable_type: bts.transmission_cable_type || '',
+        length_of_transmission_cable: bts.length_of_transmission_cable !== undefined && bts.length_of_transmission_cable !== null && bts.length_of_transmission_cable !== '' ? parseFloat(bts.length_of_transmission_cable) : 0,
+        backhauling_destination: bts.backhauling_destination || ''
+      })) : defaultData.bts_table
     };
     return {
       session_id: data.session_id,
-      numberOfCabinets: data.number_of_cabinets,
+      numberOfCabinets: data.number_of_cabinets, // Always use the latest cabinet count from database
       ranEquipment: ranEquipment,
       metadata: {
         created_at: data.created_at,
@@ -246,6 +283,48 @@ class RanEquipmentService {
       
     } catch (error) {
       throw this.handleError(error);
+    }
+  }
+  
+  /**
+   * Get technology options from Site Information
+   */
+  static async getTechnologyOptions(sessionId) {
+    try {
+      await this.validateSession(sessionId);
+      
+      // Import SiteAreaInfo model dynamically to avoid circular dependencies
+      const SiteAreaInfo = require('../models/SiteAreaInfo');
+      
+      const siteInfo = await SiteAreaInfo.findOne({
+        where: { session_id: sessionId }
+      });
+      
+      if (siteInfo && siteInfo.site_info && siteInfo.site_info.existing_technology) {
+        // Parse the existing_technology field (it's stored as a string)
+        let technologyOptions = [];
+        try {
+          if (typeof siteInfo.site_info.existing_technology === 'string') {
+            technologyOptions = JSON.parse(siteInfo.site_info.existing_technology);
+          } else if (Array.isArray(siteInfo.site_info.existing_technology)) {
+            technologyOptions = siteInfo.site_info.existing_technology;
+          }
+        } catch (parseError) {
+          console.warn('Error parsing existing_technology:', parseError);
+          technologyOptions = [];
+        }
+        
+        console.log('Found technology options in SiteAreaInfo:', technologyOptions);
+        return technologyOptions.length > 0 ? technologyOptions : ['2G', '3G', '4G', '5G', 'Other'];
+      }
+      
+      // Return default options if no site information found
+      return ['2G', '3G', '4G', '5G', 'Other'];
+      
+    } catch (error) {
+      console.warn(`Could not fetch technology options for session ${sessionId}:`, error.message);
+      // Return default options on error
+      return ['2G', '3G', '4G', '5G', 'Other'];
     }
   }
   
