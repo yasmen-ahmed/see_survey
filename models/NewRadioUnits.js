@@ -144,6 +144,12 @@ const NewRadioUnits = sequelize.define('NewRadioUnits', {
     comment: 'Length of earth cable from proposed radio unit location to earth bus bar in meters'
   },
 
+  bseHeight: {
+    type: DataTypes.DECIMAL(10, 3),
+    allowNull: true,
+    comment: 'Base height of the radio unit'
+  },
+
   created_at: {
     type: DataTypes.DATE,
     defaultValue: DataTypes.NOW

@@ -43,6 +43,41 @@ const RadioUnits = sequelize.define('RadioUnits', {
               }
             });
           }
+
+          // Validate band array
+          if (unit.band && Array.isArray(unit.band)) {
+            const validBands = ['700', '900', '1800', '2100', '2300', '2600', '3500'];
+            unit.band.forEach(band => {
+              if (!validBands.includes(band)) {
+                throw new Error(`Radio unit ${index + 1}: Invalid band value: ${band}`);
+              }
+            });
+          }
+
+          // Validate connectedToBaseBand array
+          if (unit.connectedToBaseBand && Array.isArray(unit.connectedToBaseBand)) {
+            const validBaseBands = ['Base band 1', 'Base band 2', 'Base band 3', 'Base band 4', 'Base band 5', 'Base band 6', 'Base band 7'];
+            unit.connectedToBaseBand.forEach(baseBand => {
+              if (!validBaseBands.includes(baseBand)) {
+                throw new Error(`Radio unit ${index + 1}: Invalid base band value: ${baseBand}`);
+              }
+            });
+          }
+
+          // Validate actionPlanned
+          if (unit.actionPlanned && !['Swap', 'Dismantle', 'No action'].includes(unit.actionPlanned)) {
+            throw new Error(`Radio unit ${index + 1}: Invalid action planned value: ${unit.actionPlanned}`);
+          }
+
+          // Validate technologies array (Radio Module Technology)
+          if (unit.technologies && Array.isArray(unit.technologies)) {
+            const validTechnologies = ['2G', '3G', '4G', '5G'];
+            unit.technologies.forEach(tech => {
+              if (!validTechnologies.includes(tech)) {
+                throw new Error(`Radio unit ${index + 1}: Invalid technology value: ${tech}`);
+              }
+            });
+          }
         });
       }
     }

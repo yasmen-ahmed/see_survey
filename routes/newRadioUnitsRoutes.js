@@ -27,7 +27,7 @@ const convertDataForDB = (data) => {
     'radio_unit_number', 'feeder_length_to_antenna', 'angular_l1_dimension',
     'angular_l2_dimension', 'tubular_cross_section', 'side_arm_length',
     'side_arm_cross_section', 'side_arm_offset', 'dc_power_cable_length',
-    'fiber_cable_length', 'jumper_length', 'earth_cable_length'
+    'fiber_cable_length', 'jumper_length', 'earth_cable_length', 'bseHeight'
   ];
   
   numericFields.forEach(field => {
@@ -108,6 +108,7 @@ const getDefaultRadioUnitData = (sessionId, radioUnitIndex) => {
     jumper_length: '',
     earth_bus_bar_exists: '',
     earth_cable_length: '',
+    bseHeight:'',
     created_at: null,
     updated_at: null
   };
@@ -141,7 +142,7 @@ const formatRadioUnitData = async (radioUnit, sessionId, radioUnitIndex) => {
     'radio_unit_number', 'feeder_length_to_antenna', 'angular_l1_dimension',
     'angular_l2_dimension', 'tubular_cross_section', 'side_arm_length',
     'side_arm_cross_section', 'side_arm_offset', 'dc_power_cable_length',
-    'fiber_cable_length', 'jumper_length', 'earth_cable_length'
+    'fiber_cable_length', 'jumper_length', 'earth_cable_length','bseHeight'
   ];
 
   stringFields.forEach(field => {
@@ -302,6 +303,9 @@ router.put('/:session_id', uploadAnyWithErrorHandling, async (req, res) => {
           });
         }
       }
+    } else {
+      // Handle direct JSON format
+      updateData = req.body;
     }
 
     console.log('Final updateData:', updateData);
@@ -380,10 +384,10 @@ router.put('/:session_id', uploadAnyWithErrorHandling, async (req, res) => {
           let category = field;
 
           // Try to extract radio unit index if present
-          const match = field.match(/new_radio_(\d+)_/);
+          const match = field.match(/new_radio_unit_(\d+)_/);
           if (match) {
             radio_unit_index = parseInt(match[1], 10);
-            category = field.replace(`new_radio_${radio_unit_index}_`, '');
+            category = field.replace(`new_radio_unit_${radio_unit_index}_`, '');
           }
 
           // Check for existing image with the same category and radio unit index
@@ -414,7 +418,7 @@ router.put('/:session_id', uploadAnyWithErrorHandling, async (req, res) => {
 
           // Create unique filename that includes radio unit index and category
           const fileExt = path.extname(file.originalname);
-          const uniqueFilename = `new_radio_${radio_unit_index}_${category}_${Date.now()}${fileExt}`;
+          const uniqueFilename = `new_radio_unit_${radio_unit_index}_${category}_${Date.now()}${fileExt}`;
           const relativePath = `uploads/new_radio_units/${uniqueFilename}`;
           const fullPath = path.join(__dirname, '..', relativePath);
 
