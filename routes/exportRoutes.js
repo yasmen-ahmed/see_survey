@@ -159,7 +159,7 @@ if (siteImages && siteImages['file_url']) {
       locSheet2.getCell('F3').value = areaInfo ? areaInfo['site_type'] || '' :  '';
       locSheet2.getCell('G3').value = areaInfo ? areaInfo['location_of_existing_telecom_racks_cabinets'] || '' :  '';
       locSheet2.getCell('H3').value =  acConnectionInfo? acConnectionInfo['power_sources'] || '' :  '';
-      locSheet2.getCell('M3').value = acConnectionInfo ? acConnectionInfo['diesel_config']['generators'][0]['capacity'] || '' :  '';
+      locSheet2.getCell('M3').value = acConnectionInfo['diesel_config'] ? acConnectionInfo['diesel_config']['generators'][0]['capacity'] || '' :  '';
       locSheet2.getCell('K3').value =  powerMeter? powerMeter['ac_power_source_type'] || '' :  '';
       locSheet2.getCell('J3').value = powerMeter ? powerMeter['main_cb_config']['rating'] || '' :  '';
       locSheet2.getCell('N3').value = dcPowerSystem ? dcPowerSystem['dc_power_data']['dc_rectifiers']['existing_dc_rectifiers_vendor'] || '' : '';
