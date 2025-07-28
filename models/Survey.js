@@ -50,7 +50,7 @@ const Survey = sequelize.define('Survey', {
     type: DataTypes.STRING(255)
   },
   TSSR_Status: {
-    type: DataTypes.ENUM('created', 'submitted', 'review', 'done'),
+    type: DataTypes.STRING(255),
     allowNull: false,
     defaultValue: 'created'
   }

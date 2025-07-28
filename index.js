@@ -82,6 +82,7 @@ const healthSafetyBTSAccessRoutes = require('./routes/healthSafetyBTSAccessRoute
 const newMWRoutes = require('./routes/newMWRoutes');
 const hierarchicalDataRoutes = require('./routes/hierarchicalDataRoutes');
 const radioUnitsCatalogRoutes = require('./routes/radioUnitsCatalogRoutes');
+const userManagementRoutes = require('./routes/userManagementRoutes');
 
 // Define Sequelize model associations
 const User = require('./models/User');
@@ -162,8 +163,7 @@ MU.hasMany(Country, { foreignKey: 'mu_id', as: 'countries' });
 Country.belongsTo(MU, { foreignKey: 'mu_id', as: 'mu' });
 Country.hasMany(CT, { foreignKey: 'country_id', as: 'cts' });
 CT.belongsTo(Country, { foreignKey: 'country_id', as: 'country' });
-CT.hasMany(Project, { foreignKey: 'ct_id', as: 'projects' });
-Project.belongsTo(CT, { foreignKey: 'ct_id', as: 'ct' });
+// CT-Project association is already defined in associations.js
 Project.hasMany(Company, { foreignKey: 'project_id', as: 'companies' });
 Company.belongsTo(Project, { foreignKey: 'project_id', as: 'project' });
 
@@ -200,9 +200,20 @@ app.use('/api/health-safety-bts-access', healthSafetyBTSAccessRoutes);
 app.use('/api/new-mw', newMWRoutes);
 app.use('/api/hierarchical-data', hierarchicalDataRoutes);
 app.use('/api/radio-units-catalog', radioUnitsCatalogRoutes);
+app.use('/api/user-management', userManagementRoutes);
 
 app.get('/', (req, res) => {
   res.send('Backend is running!');
+});
+
+// Health check endpoint
+app.get('/health', (req, res) => {
+  res.status(200).json({
+    status: 'healthy',
+    timestamp: new Date().toISOString(),
+    uptime: process.uptime(),
+    environment: process.env.NODE_ENV || 'development'
+  });
 });
 
 // Sync database and start server

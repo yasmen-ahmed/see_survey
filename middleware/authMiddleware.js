@@ -13,7 +13,11 @@ function authenticateToken(req, res, next) {
       return res.status(403).json({ error: 'Invalid token' });
     }
     // user contains the payload we signed: { userId, username, role }
-    req.user = user;
+    req.user = {
+      id: user.userId, // Map userId to id for consistency
+      username: user.username,
+      role: user.role
+    };
     next();
   });
 }

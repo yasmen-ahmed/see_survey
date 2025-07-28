@@ -26,11 +26,6 @@ const User = sequelize.define('User', {
     type: DataTypes.STRING(255),
     allowNull: false
   },
-  role: {
-    type: DataTypes.ENUM('admin', 'engineer'),
-    defaultValue: 'engineer',
-    allowNull: false
-  },
   firstName: {
     type: DataTypes.STRING(100),
     allowNull: false
@@ -68,6 +63,64 @@ User.beforeCreate(async (user) => {
 // Instance method to compare password
 User.prototype.comparePassword = async function(candidatePassword) {
   return await bcrypt.compare(candidatePassword, this.password);
+};
+
+// Instance method to get user roles
+User.prototype.getRoles = async function() {
+  try {
+    // Use Sequelize association to get roles
+    const userWithRoles = await User.findByPk(this.id, {
+      include: [{
+        model: require('./Role'),
+        as: 'roles',
+        through: {
+          model: require('./UserRole'),
+          where: { is_active: true }
+        },
+        where: { is_active: true }
+      }]
+    });
+    
+    return userWithRoles ? userWithRoles.roles : [];
+  } catch (error) {
+    console.error('Error getting user roles:', error);
+    return [];
+  }
+};
+
+// Instance method to get user projects
+User.prototype.getAssignedProjects = async function() {
+  try {
+    // Use Sequelize association to get projects
+    const userWithProjects = await User.findByPk(this.id, {
+      include: [{
+        model: require('./Project'),
+        as: 'assignedProjects',
+        through: {
+          model: require('./UserProject'),
+          where: { is_active: true }
+        },
+        where: { is_active: true }
+      }]
+    });
+    
+    return userWithProjects ? userWithProjects.assignedProjects : [];
+  } catch (error) {
+    console.error('Error getting user projects:', error);
+    return [];
+  }
+};
+
+// Instance method to check if user has a specific role
+User.prototype.hasRole = async function(roleName) {
+  const roles = await this.getRoles();
+  return roles.some(role => role.name === roleName);
+};
+
+// Instance method to check if user has any of the specified roles
+User.prototype.hasAnyRole = async function(roleNames) {
+  const roles = await this.getRoles();
+  return roles.some(role => roleNames.includes(role.name));
 };
 
 module.exports = User; 

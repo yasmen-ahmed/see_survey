@@ -1,0 +1,23 @@
+# Development Dockerfile for Backend
+FROM node:18-alpine
+
+# Set working directory
+WORKDIR /app
+
+# Copy package files
+COPY package*.json ./
+
+# Install all dependencies (including dev dependencies)
+RUN npm ci
+
+# Copy source code
+COPY . .
+
+# Create uploads directory and set permissions
+RUN mkdir -p uploads && chmod 755 uploads
+
+# Expose port
+EXPOSE 3000
+
+# Start development server with nodemon
+CMD ["npm", "run", "dev"] 
