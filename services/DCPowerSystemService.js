@@ -96,7 +96,10 @@ class DCPowerSystemService {
           how_many_existing_dc_rectifier_modules: parseInt(data.dc_rectifiers?.how_many_existing_dc_rectifier_modules) || 0,
           rectifier_module_capacity: parseFloat(data.dc_rectifiers?.rectifier_module_capacity) || 0,
           total_capacity_existing_dc_power_system: parseFloat(data.dc_rectifiers?.total_capacity_existing_dc_power_system) || 0,
-          how_many_free_slot_available_rectifier: parseInt(data.dc_rectifiers?.how_many_free_slot_available_rectifier) || 0
+          how_many_free_slot_available_rectifier: parseInt(data.dc_rectifiers?.how_many_free_slot_available_rectifier) || 0,
+          dc_rectifier_condition: data.dc_rectifiers?.dc_rectifier_condition || '',
+          rect_load_current_reading: parseFloat(data.dc_rectifiers?.rect_load_current_reading) || 0,
+          existing_site_temperature: parseFloat(data.dc_rectifiers?.existing_site_temperature) || 0
         },
         
         // Batteries section
@@ -109,7 +112,11 @@ class DCPowerSystemService {
           how_many_free_slot_available_battery: parseInt(data.batteries?.how_many_free_slot_available_battery) || 0,
           new_battery_string_installation_location: Array.isArray(data.batteries?.new_battery_string_installation_location) 
             ? data.batteries.new_battery_string_installation_location 
-            : []
+            : [],
+          batteries_condition: data.batteries?.batteries_condition || '',
+          new_battery_type: data.batteries?.new_battery_type || '',
+          new_battery_capacity: parseFloat(data.batteries?.new_battery_capacity) || 0,
+          new_battery_qty: parseInt(data.batteries?.new_battery_qty) || 0
         }
       }
     };
@@ -235,7 +242,10 @@ class DCPowerSystemService {
         how_many_existing_dc_rectifier_modules: 1,
         rectifier_module_capacity: 0,
         total_capacity_existing_dc_power_system: 0,
-        how_many_free_slot_available_rectifier: 1
+        how_many_free_slot_available_rectifier: 1,
+        dc_rectifier_condition: '',
+        rect_load_current_reading: 0,
+        existing_site_temperature: 0
       },
       batteries: {
         existing_batteries_strings_location: '',
@@ -244,7 +254,11 @@ class DCPowerSystemService {
         how_many_existing_battery_string: 1,
         total_battery_capacity: 0,
         how_many_free_slot_available_battery: 1,
-        new_battery_string_installation_location: []
+        new_battery_string_installation_location: [],
+        batteries_condition: '',
+        new_battery_type: '',
+        new_battery_capacity: 0,
+        new_battery_qty: 0
       }
     };
   }
@@ -297,7 +311,10 @@ class DCPowerSystemService {
         how_many_existing_dc_rectifier_modules: dcPowerData?.dc_rectifiers?.how_many_existing_dc_rectifier_modules || defaultData.dc_rectifiers.how_many_existing_dc_rectifier_modules,
         rectifier_module_capacity: dcPowerData?.dc_rectifiers?.rectifier_module_capacity || defaultData.dc_rectifiers.rectifier_module_capacity,
         total_capacity_existing_dc_power_system: dcPowerData?.dc_rectifiers?.total_capacity_existing_dc_power_system || defaultData.dc_rectifiers.total_capacity_existing_dc_power_system,
-        how_many_free_slot_available_rectifier: dcPowerData?.dc_rectifiers?.how_many_free_slot_available_rectifier || defaultData.dc_rectifiers.how_many_free_slot_available_rectifier
+        how_many_free_slot_available_rectifier: dcPowerData?.dc_rectifiers?.how_many_free_slot_available_rectifier || defaultData.dc_rectifiers.how_many_free_slot_available_rectifier,
+        dc_rectifier_condition: dcPowerData?.dc_rectifiers?.dc_rectifier_condition || defaultData.dc_rectifiers.dc_rectifier_condition,
+        rect_load_current_reading: dcPowerData?.dc_rectifiers?.rect_load_current_reading || defaultData.dc_rectifiers.rect_load_current_reading,
+        existing_site_temperature: dcPowerData?.dc_rectifiers?.existing_site_temperature || defaultData.dc_rectifiers.existing_site_temperature
       },
       batteries: {
         existing_batteries_strings_location: dcPowerData?.batteries?.existing_batteries_strings_location || defaultData.batteries.existing_batteries_strings_location,
@@ -306,7 +323,11 @@ class DCPowerSystemService {
         how_many_existing_battery_string: dcPowerData?.batteries?.how_many_existing_battery_string || defaultData.batteries.how_many_existing_battery_string,
         total_battery_capacity: dcPowerData?.batteries?.total_battery_capacity || defaultData.batteries.total_battery_capacity,
         how_many_free_slot_available_battery: dcPowerData?.batteries?.how_many_free_slot_available_battery || defaultData.batteries.how_many_free_slot_available_battery,
-        new_battery_string_installation_location: Array.isArray(dcPowerData?.batteries?.new_battery_string_installation_location) ? dcPowerData.batteries.new_battery_string_installation_location : defaultData.batteries.new_battery_string_installation_location
+        new_battery_string_installation_location: Array.isArray(dcPowerData?.batteries?.new_battery_string_installation_location) ? dcPowerData.batteries.new_battery_string_installation_location : defaultData.batteries.new_battery_string_installation_location,
+        batteries_condition: dcPowerData?.batteries?.batteries_condition || defaultData.batteries.batteries_condition,
+        new_battery_type: dcPowerData?.batteries?.new_battery_type || defaultData.batteries.new_battery_type,
+        new_battery_capacity: dcPowerData?.batteries?.new_battery_capacity || defaultData.batteries.new_battery_capacity,
+        new_battery_qty: dcPowerData?.batteries?.new_battery_qty || defaultData.batteries.new_battery_qty
       }
     };
     

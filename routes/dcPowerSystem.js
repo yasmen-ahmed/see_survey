@@ -19,7 +19,11 @@ const getDynamicUploadFields = (maxRectifiers = 20, maxBatteries = 10) => {
   fields.push(
     { name: 'free_slots_rectifier_modules', maxCount: 1 },
     { name: 'rectifier_cb_photos', maxCount: 1 },
-    { name: 'rectifier_free_cb_photo', maxCount: 1 }
+    { name: 'rectifier_free_cb_photo', maxCount: 1 },
+    { name: 'rect_load_current_reading_photo', maxCount: 1 },
+    { name: 'existing_site_temperature_photo', maxCount: 1 },
+    { name: 'rectifier_picture', maxCount: 1 },
+    { name: 'rectifier_manufactory_specification_picture', maxCount: 1 }
   );
 
   // Add battery string photo fields
@@ -106,7 +110,9 @@ router.put('/:sessionId', upload.fields(getDynamicUploadFields()), async (req, r
           how_many_existing_dc_rectifier_modules: parseInt(dc_rectifiers.how_many_existing_dc_rectifier_modules) || 0,
           rectifier_module_capacity: parseFloat(dc_rectifiers.rectifier_module_capacity) || 0,
           total_capacity_existing_dc_power_system: parseFloat(dc_rectifiers.total_capacity_existing_dc_power_system) || 0,
-          how_many_free_slot_available_rectifier: parseInt(dc_rectifiers.how_many_free_slot_available_rectifier) || 0
+          how_many_free_slot_available_rectifier: parseInt(dc_rectifiers.how_many_free_slot_available_rectifier) || 0,
+          rect_load_current_reading: parseFloat(dc_rectifiers.rect_load_current_reading) || 0,
+          existing_site_temperature: parseFloat(dc_rectifiers.existing_site_temperature) || 0
         };
       }
       
@@ -120,7 +126,9 @@ router.put('/:sessionId', upload.fields(getDynamicUploadFields()), async (req, r
           how_many_free_slot_available_battery: parseInt(batteries.how_many_free_slot_available_battery) || 0,
           new_battery_string_installation_location: Array.isArray(batteries.new_battery_string_installation_location) 
             ? batteries.new_battery_string_installation_location 
-            : []
+            : [],
+          new_battery_capacity: parseFloat(batteries.new_battery_capacity) || 0,
+          new_battery_qty: parseInt(batteries.new_battery_qty) || 0
         };
       }
     } catch (parseError) {

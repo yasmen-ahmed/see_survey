@@ -66,7 +66,10 @@ class OutdoorGeneralLayoutService {
       cable_tray_config: null,
       cable_tray_space_available: data.cable_tray_space_available !== undefined ? data.cable_tray_space_available : null,
       earth_bus_bar_config: null,
-      has_site_sketch: data.has_site_sketch !== undefined ? data.has_site_sketch : null
+      has_site_sketch: data.has_site_sketch !== undefined ? data.has_site_sketch : null,
+      distance_from_equipment_to_tower_base: data.distance_from_equipment_to_tower_base || null,
+      is_earth_bus_bars_connected_to_main_earth_system: data.is_earth_bus_bars_connected_to_main_earth_system !== undefined ? data.is_earth_bus_bars_connected_to_main_earth_system : null,
+      ac_electrical_sockets: data.ac_electrical_sockets || null
     };
     
     // Process cable tray configuration
@@ -161,6 +164,9 @@ class OutdoorGeneralLayoutService {
         free_holes: null
       },
       has_site_sketch: data.has_site_sketch,
+      distance_from_equipment_to_tower_base: data.distance_from_equipment_to_tower_base,
+      is_earth_bus_bars_connected_to_main_earth_system: data.is_earth_bus_bars_connected_to_main_earth_system,
+      ac_electrical_sockets: data.ac_electrical_sockets,
       metadata: {
         created_at: data.created_at,
         updated_at: data.updated_at
@@ -186,6 +192,9 @@ class OutdoorGeneralLayoutService {
         free_holes: null
       },
       has_site_sketch: null,
+      distance_from_equipment_to_tower_base: null,
+      is_earth_bus_bars_connected_to_main_earth_system: null,
+      ac_electrical_sockets: null,
       metadata: {
         created_at: null,
         updated_at: null

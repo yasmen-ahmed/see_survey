@@ -48,6 +48,9 @@ class MWAntennasService {
       });
       
       if (updateData) {
+        console.log('=== GET OR CREATE WITH UPDATE DATA ===');
+        console.log('Update data received:', JSON.stringify(updateData, null, 2));
+        
         // Validate that we have the required structure
         if (!updateData.mwAntennasData || !updateData.mwAntennasData.mw_antennas) {
           throw {
@@ -56,21 +59,14 @@ class MWAntennasService {
           };
         }
         
-        // Process and validate the update data
-        const processedData = {
-          how_many_mw_antennas_on_tower: updateData.how_many_mw_antennas_on_tower,
-          mw_antennas: updateData.mwAntennasData.mw_antennas.map((antenna, index) => ({
-            antenna_number: index + 1,
-            height: this.validateNumber(antenna.height),
-            diameter: this.validateNumber(antenna.diameter),
-            azimuth: this.validateNumber(antenna.azimuth)
-          }))
-        };
+        // Process and validate the update data using the processUpdateData method
+        const processedData = this.processUpdateData(updateData, numberOfCabinets);
+        console.log('Processed data for database:', JSON.stringify(processedData, null, 2));
         
         if (record) {
           // If number of antennas decreased, delete excess antenna images
           const currentAntennas = record.mw_antennas_data?.how_many_mw_antennas_on_tower || 1;
-          const newAntennas = processedData.how_many_mw_antennas_on_tower;
+          const newAntennas = processedData.mwAntennasData.how_many_mw_antennas_on_tower;
           
           if (newAntennas < currentAntennas) {
             const MWAntennasImageService = require('./MWAntennasImageService');
@@ -81,17 +77,19 @@ class MWAntennasService {
           }
 
           // Update existing record
+          console.log('Updating existing record with data:', JSON.stringify(processedData.mwAntennasData, null, 2));
           await record.update({
             number_of_cabinets: numberOfCabinets,
-            mw_antennas_data: processedData
+            mw_antennas_data: processedData.mwAntennasData
           });
           await record.reload();
         } else {
           // Create new record
+          console.log('Creating new record with data:', JSON.stringify(processedData.mwAntennasData, null, 2));
           record = await MWAntennas.create({
             session_id: sessionId,
             number_of_cabinets: numberOfCabinets,
-            mw_antennas_data: processedData
+            mw_antennas_data: processedData.mwAntennasData
           });
         }
       } else if (!record) {
@@ -115,37 +113,62 @@ class MWAntennasService {
    * Process and validate update data
    */
   static processUpdateData(data, numberOfCabinets) {
+    console.log('=== SERVICE PROCESS UPDATE DATA ===');
+    console.log('Input data:', JSON.stringify(data, null, 2));
+    
     // Validate how many MW antennas (between 1 and 10)
     const howManyMWAntennas = Math.max(1, Math.min(10, parseInt(data.how_many_mw_antennas_on_tower) || 1));
+    console.log('Number of antennas to process:', howManyMWAntennas);
     
     // Get antenna data from the request
     const antennaData = data.mwAntennasData?.mw_antennas || [];
+    console.log('Antenna data from request:', JSON.stringify(antennaData, null, 2));
     
     // Create MW antennas array based on the selected quantity
     const mwAntennas = [];
     
     // Process each antenna's data
     for (let i = 0; i < howManyMWAntennas; i++) {
+      console.log(`\n--- Processing Antenna ${i + 1} ---`);
+      console.log('Raw antenna data:', antennaData[i]);
+      
       const antenna = {
         antenna_number: i + 1,
         height: this.validateNumber(antennaData[i]?.height),
         diameter: this.validateNumber(antennaData[i]?.diameter),
-        azimuth: this.validateNumber(antennaData[i]?.azimuth)
+        azimuth: this.validateNumber(antennaData[i]?.azimuth),
+        oduLocation: antennaData[i]?.oduLocation || '',
+        operator: antennaData[i]?.operator || '',
+        farEndSiteId: antennaData[i]?.farEndSiteId || '',
+        hopDistance: this.validateNumber(antennaData[i]?.hopDistance),
+        linkCapacity: this.validateNumber(antennaData[i]?.linkCapacity),
+        actionPlanned: antennaData[i]?.actionPlanned || ''
       };
+      console.log(`Processed antenna ${i + 1}:`, JSON.stringify(antenna, null, 2));
       mwAntennas.push(antenna);
     }
     
-    return {
+    const result = {
       mwAntennasData: {
         how_many_mw_antennas_on_tower: howManyMWAntennas,
         mw_antennas: mwAntennas.map(antenna => ({
-          ...antenna,
+          antenna_number: antenna.antenna_number,
           height: antenna.height || 0,
           diameter: antenna.diameter || 0,
-          azimuth: antenna.azimuth || 0
+          azimuth: antenna.azimuth || 0,
+          oduLocation: antenna.oduLocation || '',
+          operator: antenna.operator || '',
+          farEndSiteId: antenna.farEndSiteId || '',
+          hopDistance: antenna.hopDistance || 0,
+          linkCapacity: antenna.linkCapacity || 0,
+          actionPlanned: antenna.actionPlanned || ''
         }))
       }
     };
+    
+    console.log('Final processed result:', JSON.stringify(result, null, 2));
+    console.log('=== END SERVICE PROCESS ===');
+    return result;
   }
   
   /**
@@ -216,10 +239,56 @@ class MWAntennasService {
           antenna_number: 1,
           height: 0,
           diameter: 0,
-          azimuth: 0
+          azimuth: 0,
+          oduLocation: '',
+          operator: '',
+          farEndSiteId: '',
+          hopDistance: 0,
+          linkCapacity: 0,
+          actionPlanned: ''
         }
       ]
     };
+  }
+  
+  /**
+   * Get operator options from Site Information
+   */
+  static async getOperatorOptions(sessionId) {
+    try {
+      // Import SiteAreaInfo model dynamically to avoid circular dependencies
+      const SiteAreaInfo = require('../models/SiteAreaInfo');
+      
+      const siteInfo = await SiteAreaInfo.findOne({
+        where: { session_id: sessionId }
+      });
+      
+      if (siteInfo && siteInfo.other_telecom_operators_exist_onsite) {
+        // Parse the other_telecom_operators_exist_onsite field (it's stored as a string)
+        let operatorOptions = [];
+        try {
+          if (typeof siteInfo.other_telecom_operators_exist_onsite === 'string') {
+            operatorOptions = JSON.parse(siteInfo.other_telecom_operators_exist_onsite);
+          } else if (Array.isArray(siteInfo.other_telecom_operators_exist_onsite)) {
+            operatorOptions = siteInfo.other_telecom_operators_exist_onsite;
+          }
+        } catch (parseError) {
+          console.warn('Error parsing other_telecom_operators_exist_onsite:', parseError);
+          operatorOptions = [];
+        }
+        
+        console.log('Found operator options in SiteAreaInfo:', operatorOptions);
+        return operatorOptions.length > 0 ? operatorOptions : ['Operator A', 'Operator B', 'Operator C'];
+      }
+      
+      // Return default options if no site information found
+      return ['Operator A', 'Operator B', 'Operator C'];
+      
+    } catch (error) {
+      console.warn(`Could not fetch operator options for session ${sessionId}:`, error.message);
+      // Return default options on error
+      return ['Operator A', 'Operator B', 'Operator C'];
+    }
   }
   
   /**
@@ -278,7 +347,13 @@ class MWAntennasService {
         antenna_number: antennas.length + 1,
         height: 0,
         diameter: 0,
-        azimuth: 0
+        azimuth: 0,
+        oduLocation: '',
+        operator: '',
+        farEndSiteId: '',
+        hopDistance: 0,
+        linkCapacity: 0,
+        actionPlanned: ''
       });
     }
     
@@ -287,13 +362,28 @@ class MWAntennasService {
       antennas = antennas.slice(0, howManyAntennas);
     }
     
-    // Ensure antenna numbers are correct
+    // Ensure antenna numbers are correct and include all fields
     antennas = antennas.map((antenna, index) => ({
       antenna_number: index + 1,
       height: antenna.height || 0,
       diameter: antenna.diameter || 0,
-      azimuth: antenna.azimuth || 0
+      azimuth: antenna.azimuth || 0,
+      oduLocation: antenna.oduLocation || '',
+      operator: antenna.operator || '',
+      farEndSiteId: antenna.farEndSiteId || '',
+      hopDistance: antenna.hopDistance || 0,
+      linkCapacity: antenna.linkCapacity || 0,
+      actionPlanned: antenna.actionPlanned || ''
     }));
+    
+    // Get operator options from site information
+    let operatorOptions = [];
+    try {
+      operatorOptions = await this.getOperatorOptions(data.session_id);
+    } catch (error) {
+      console.warn(`Could not fetch operator options for session ${data.session_id}:`, error.message);
+      operatorOptions = ['Operator A', 'Operator B', 'Operator C'];
+    }
     
     // Fetch images for each antenna
     const MWAntennasImageService = require('./MWAntennasImageService');
@@ -318,6 +408,7 @@ class MWAntennasService {
       session_id: data.session_id,
       numberOfCabinets: data.number_of_cabinets,
       mwAntennasData: mwAntennasData,
+      operatorOptions: operatorOptions,
       metadata: {
         created_at: data.created_at,
         updated_at: data.updated_at,

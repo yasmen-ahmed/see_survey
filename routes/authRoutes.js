@@ -15,8 +15,7 @@ router.post('/register', async (req, res) => {
       lastName,
       NID,
       phone,
-      title,
-      role
+      title
     } = req.body;
 
     // Check if user already exists
@@ -36,7 +35,7 @@ router.post('/register', async (req, res) => {
       });
     }
 
-    // Create new user
+    // Create new user (without role field)
     const user = await User.create({
       username,
       email,
@@ -45,13 +44,12 @@ router.post('/register', async (req, res) => {
       lastName,
       NID,
       phone,
-      title,
-      role: role || 'engineer'
+      title
     });
 
-    // Generate JWT token
+    // Generate JWT token (without role for now)
     const token = jwt.sign(
-      { userId: user.id, username: user.username, role: user.role },
+      { userId: user.id, username: user.username },
       process.env.JWT_SECRET || 'your-secret-key',
       { expiresIn: '24h' }
     );
@@ -63,7 +61,9 @@ router.post('/register', async (req, res) => {
         id: user.id,
         username: user.username,
         email: user.email,
-        role: user.role
+        firstName: user.firstName,
+        lastName: user.lastName,
+        title: user.title
       }
     });
   } catch (error) {
@@ -96,9 +96,20 @@ router.post('/login', async (req, res) => {
       return res.status(401).json({ error: 'Invalid credentials' });
     }
 
+    // Get user roles from the new role system
+    let userRoles = [];
+    try {
+      userRoles = await user.getRoles();
+    } catch (error) {
+      console.log('No roles found for user:', user.id);
+    }
+
+    // Get the primary role (first role or default)
+    const primaryRole = userRoles.length > 0 ? userRoles[0].name : 'user';
+
     // Generate JWT token
     const token = jwt.sign(
-      { userId: user.id, username: user.username, role: user.role },
+      { userId: user.id, username: user.username, role: primaryRole },
       process.env.JWT_SECRET || 'your-secret-key',
       { expiresIn: '24h' }
     );
@@ -115,7 +126,12 @@ router.post('/login', async (req, res) => {
         phone: user.phone,
         title: user.title,
         email: user.email,
-        role: user.role
+        role: primaryRole,
+        roles: userRoles.map(role => ({
+          id: role.id,
+          name: role.name,
+          description: role.description
+        }))
       }
     });
   } catch (error) {

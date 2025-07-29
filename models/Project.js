@@ -5,15 +5,20 @@ const Project = sequelize.define('Project', {
   id: {
     type: DataTypes.INTEGER,
     primaryKey: true,
-    autoIncrement: true
+    autoIncrement: true,
+    allowNull: false
   },
   name: {
     type: DataTypes.STRING(255),
-    allowNull: false
+    allowNull: false,
+    validate: {
+      notEmpty: true,
+      len: [1, 255]
+    }
   },
   ct_id: {
     type: DataTypes.INTEGER,
-    allowNull: false,
+    allowNull: true,
     references: {
       model: 'cts',
       key: 'id'
@@ -21,17 +26,47 @@ const Project = sequelize.define('Project', {
   },
   code: {
     type: DataTypes.STRING(50),
+    allowNull: true,
+    comment: 'Project code'
+  },
+  description: {
+    type: DataTypes.TEXT,
+    allowNull: true
+  },
+  status: {
+    type: DataTypes.STRING(20),
+    defaultValue: 'active',
+    allowNull: false,
+    validate: {
+      isIn: [['active', 'inactive', 'completed', 'on_hold']]
+    }
+  },
+  start_date: {
+    type: DataTypes.DATE,
+    allowNull: true
+  },
+  end_date: {
+    type: DataTypes.DATE,
+    allowNull: true
+  },
+  client: {
+    type: DataTypes.STRING(255),
+    allowNull: true
+  },
+  budget: {
+    type: DataTypes.DECIMAL(15, 2),
+    allowNull: true
+  },
+  is_active: {
+    type: DataTypes.BOOLEAN,
+    defaultValue: true,
     allowNull: false
   }
 }, {
   tableName: 'projects',
   timestamps: true,
-  indexes: [
-    {
-      unique: true,
-      fields: ['ct_id', 'code']
-    }
-  ]
+  updatedAt: 'updatedAt',
+  createdAt: 'createdAt'
 });
 
 // Define associations

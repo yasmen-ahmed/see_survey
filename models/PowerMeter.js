@@ -83,6 +83,32 @@ const PowerMeter = sequelize.define('PowerMeter', {
     }
   },
   
+  // Electrical measurements
+  electrical_measurements: {
+    type: DataTypes.JSON,
+    defaultValue: null,
+    validate: {
+      isValidElectricalMeasurements(value) {
+        if (value === null) return;
+        
+        // All electrical measurement fields are optional, so no strict validation needed
+        const validFields = [
+          'existing_phase_1_voltage', 'existing_phase_2_voltage', 'existing_phase_3_voltage',
+          'existing_phase_1_current', 'existing_phase_2_current', 'existing_phase_3_current',
+          'sharing_phase_1_current', 'sharing_phase_2_current', 'sharing_phase_3_current',
+          'phase_to_phase_l1_l2', 'phase_to_phase_l1_l3', 'phase_to_phase_l2_l3',
+          'earthing_to_neutral_voltage'
+        ];
+        
+        // Check if all keys are valid
+        const invalidKeys = Object.keys(value).filter(key => !validFields.includes(key));
+        if (invalidKeys.length > 0) {
+          throw new Error(`Invalid electrical measurement fields: ${invalidKeys.join(', ')}`);
+        }
+      }
+    }
+  },
+  
   // Metadata for tracking
   created_at: {
     type: DataTypes.DATE,

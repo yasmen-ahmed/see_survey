@@ -68,7 +68,10 @@ class AcConnectionService {
             path: imageFile.path
           });
 
-          const imageCategory = imageFile.fieldname || 'generator_photo';
+          const imageCategory = imageFile.fieldname;
+          if (!imageCategory) {
+            throw new Error('Image fieldname is required');
+          }
           const timestamp = Date.now();
           const filename = `ac_connection_${timestamp}_${imageFile.originalname.replace(/[^a-zA-Z0-9.-]/g, '_')}`;
           
@@ -169,6 +172,7 @@ class AcConnectionService {
   static processUpdateData(data) {
     const processed = {
       power_sources: data.power_sources || [],
+      transformer_capacity: data.transformer_capacity || null,
       diesel_config: null,
       solar_config: null
     };
@@ -205,7 +209,10 @@ class AcConnectionService {
       config.generators.push({
         capacity: parseFloat(generator.capacity),
         status: generator.status,
-        name: `Generator ${i + 1}`
+        name: `Generator ${i + 1}`,
+        cable_size_from_generator_to_ac_panel: generator.cable_size_from_generator_to_ac_panel || '',
+        generator_brand: generator.generator_brand || '',
+        fuel_tank_capacity: generator.fuel_tank_capacity || ''
       });
     }
     
@@ -231,6 +238,7 @@ class AcConnectionService {
     return {
       session_id: data.session_id,
       power_sources: data.power_sources || [],
+      transformer_capacity: data.transformer_capacity,
       diesel_config: data.diesel_config,
       solar_config: data.solar_config,
       images: data.images || [],
@@ -247,6 +255,7 @@ class AcConnectionService {
   static getDefaultResponse() {
     return {
       power_sources: [],
+      transformer_capacity: null,
       diesel_config: null,
       solar_config: null,
       images: [],

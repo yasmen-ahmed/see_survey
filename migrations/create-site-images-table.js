@@ -25,7 +25,9 @@ module.exports = {
           'site_name_shelter',
           'crane_access_street',
           'crane_location',
-          'site_environment'
+          'site_environment',
+          'site_map_snapshot',
+          'site_id_picture'
         ),
         allowNull: false
       },

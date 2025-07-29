@@ -37,6 +37,15 @@ const AcConnectionInfo = sequelize.define('AcConnectionInfo', {
     }
   },
   
+  // Transformer capacity for commercial power
+  transformer_capacity: {
+    type: DataTypes.FLOAT,
+    allowNull: true,
+    validate: {
+      min: 0
+    }
+  },
+  
   // Diesel generator configuration
   diesel_config: {
     type: DataTypes.JSON,
@@ -61,6 +70,7 @@ const AcConnectionInfo = sequelize.define('AcConnectionInfo', {
           if (!['active', 'standby', 'faulty', 'not_working'].includes(gen.status)) {
             throw new Error(`Generator ${index + 1} has invalid status`);
           }
+          // Additional fields are optional, so no validation needed
         });
       }
     }

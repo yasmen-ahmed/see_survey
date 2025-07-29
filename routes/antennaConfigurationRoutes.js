@@ -66,13 +66,16 @@ const getDefaultAntennaStructure = () => ({
   earth_cable_length: "",
   
   // Planning
-  included_in_upgrade: false
+  included_in_upgrade: false,
+  
+  // Action Planning
+  action_planned: "No action"
 });
 
 // Helper function to create default response structure
 const getDefaultResponseStructure = (sessionId, cabinetCount = 0) => ({
   session_id: sessionId,
-  antenna_count: 0,
+  antenna_count: 1,
   antennas: [],
   created_at: null,
   updated_at: null,
@@ -139,6 +142,11 @@ const validateAntennaData = (antenna, index) => {
     errors.push(`Antenna ${antennaNum}: Invalid vendor selection`);
   }
 
+  // Validate action planned field
+  if (antenna.action_planned && !['Swap / Dismantle', 'No action'].includes(antenna.action_planned)) {
+    errors.push(`Antenna ${antennaNum}: Invalid action planned selection`);
+  }
+
   // Nokia-specific validations
   if (antenna.vendor === 'Nokia') {
     if (antenna.is_active_antenna && antenna.nokia_fiber_count !== undefined && antenna.nokia_fiber_count !== null && ![1, 2, 3, 4].includes(Number(antenna.nokia_fiber_count))) {
@@ -160,7 +168,7 @@ const validateAntennaData = (antenna, index) => {
 
     // Validate port types
     if (antenna.other_port_types && Array.isArray(antenna.other_port_types)) {
-      const validPortTypes = ['7/16', '4.3-10', 'MQ4', 'MQ5'];
+      const validPortTypes = ['7/16', '4.310', 'MQ4', 'MQ5', 'Other'];
       const invalidPortTypes = antenna.other_port_types.filter(type => !validPortTypes.includes(type));
       if (invalidPortTypes.length > 0) {
         errors.push(`Antenna ${antennaNum}: Invalid port types: ${invalidPortTypes.join(', ')}`);

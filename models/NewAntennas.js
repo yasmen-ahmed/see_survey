@@ -115,6 +115,37 @@ const NewAntennas = sequelize.define('NewAntennas', {
     comment: 'Length of earth cable from proposed antenna location to earth bus bar'
   },
 
+  // Antenna specifications
+  antennaVendor: {
+    type: DataTypes.STRING,
+    allowNull: true,
+    comment: 'Antenna vendor name'
+  },
+
+  antennaVendorOther: {
+    type: DataTypes.STRING,
+    allowNull: true,
+    comment: 'Other antenna vendor name when antennaVendor is Other'
+  },
+
+  antennaHeight: {
+    type: DataTypes.DECIMAL(10, 2),
+    allowNull: true,
+    comment: 'Antenna height in meters'
+  },
+
+  antennaWeight: {
+    type: DataTypes.DECIMAL(10, 2),
+    allowNull: true,
+    comment: 'Antenna weight in kg'
+  },
+
+  antennaDiameter: {
+    type: DataTypes.DECIMAL(10, 2),
+    allowNull: true,
+    comment: 'Antenna diameter in mm'
+  },
+
   created_at: {
     type: DataTypes.DATE,
     defaultValue: DataTypes.NOW

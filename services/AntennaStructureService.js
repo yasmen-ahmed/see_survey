@@ -103,8 +103,10 @@ class AntennaStructureService {
         
         // Common fields
         lightening_system_installed: this.validateRadioButton(data.lightening_system_installed, ['Yes', 'No']),
-        earthing_bus_bars_exist: this.validateRadioButton(data.earthing_bus_bars_exist, ['Yes', 'No']),
-        how_many_free_holes_bus_bars: this.validateDropdown(data.how_many_free_holes_bus_bars)
+        earthing_bus_bars_exist: this.validateNumber(data.earthing_bus_bars_exist),  // Change to validate as number
+        how_many_free_holes_bus_bars: this.validateDropdown(data.how_many_free_holes_bus_bars),
+        tower_manufacturer: data.tower_manufacturer || '', // Fix field name mapping
+        empty_mounts: this.validateNumber(data.empty_mounts), // Fix field name mapping
       }
     };
     return processed;
@@ -189,8 +191,10 @@ class AntennaStructureService {
       
       // Common fields
       lightening_system_installed: '',
-      earthing_bus_bars_exist: '',
-      how_many_free_holes_bus_bars: ''
+      earthing_bus_bars_exist: 0,  // Set default to 0 instead of empty string
+      how_many_free_holes_bus_bars: '',
+      tower_manufacturer: '', // Default value
+      empty_mounts: 0, // Default value
     };
   }
   
@@ -252,7 +256,9 @@ class AntennaStructureService {
       // Common fields
       lightening_system_installed: antennaStructureData?.lightening_system_installed || defaultData.lightening_system_installed,
       earthing_bus_bars_exist: antennaStructureData?.earthing_bus_bars_exist || defaultData.earthing_bus_bars_exist,
-      how_many_free_holes_bus_bars: antennaStructureData?.how_many_free_holes_bus_bars || defaultData.how_many_free_holes_bus_bars
+      how_many_free_holes_bus_bars: antennaStructureData?.how_many_free_holes_bus_bars || defaultData.how_many_free_holes_bus_bars,
+      tower_manufacturer: antennaStructureData?.tower_manufacturer || defaultData.tower_manufacturer,
+      empty_mounts: antennaStructureData?.empty_mounts || defaultData.empty_mounts
     };
 
     // Get images for this antenna structure
@@ -265,6 +271,10 @@ class AntennaStructureService {
       console.warn(`Could not fetch images for session ${data.session_id}:`, imageError.message);
     }
     
+    // Get dynamic categories based on empty mounts count
+    const emptyMountsCount = antennaStructureData.empty_mounts || 0;
+    const availableCategories = AntennaStructureImageService.getDynamicCategories(emptyMountsCount);
+    
     return {
       session_id: data.session_id,
       numberOfCabinets: data.number_of_cabinets,
@@ -273,7 +283,7 @@ class AntennaStructureService {
         total_images: images.length,
         images_by_category: imagesGroupedByCategory,
         all_images: images,
-        available_categories: AntennaStructureImageService.getAvailableCategories()
+        available_categories: availableCategories
       },
       metadata: {
         created_at: data.created_at,

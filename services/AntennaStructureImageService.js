@@ -300,11 +300,52 @@ class AntennaStructureImageService {
       'structure_legs_photo_4',
       'building_photo',
       'north_direction_view',
-      'cables_route_photo_from_tower_top_1',
-      'cables_route_photo_from_tower_top_2',
-      'general_structure_photo',
-      'custom_photo'
+      'tower_ladder_and_cables_feeders_1',
+      'tower_ladder_and_cables_feeders_2',
+      'cable_tray_showing_all_cables_1',
+      'cable_tray_showing_all_cables_2',
+      'cable_tray_showing_all_cables_3',
+      'cable_tray_showing_all_cables_4',
+      'complete_tower_picture_from_different_angles_1',
+      'complete_tower_picture_from_different_angles_2',
+      'complete_tower_picture_from_different_angles_3',
+      'tower_pic_top_of_tower_shows_measure_tool_with_reading',
+      'tower_pic_bottom_of_tower_shows_measure_tool_with_reading',
+      'tower_additional_picture_1',
+      'tower_additional_picture_2',
+      'tower_additional_picture_3',
+      'tower_additional_picture_4',
+      'tower_manufactory_specification_picture',
+      'top_of_building_shows_measure_tool_with_reading_picture',
+      'building_parapet_picture_with_measure_tool_and_length_reading',
+      'rf_panorama_photos_0_deg',
+      'rf_panorama_photos_30_deg',
+      'rf_panorama_photos_60_deg',
+      'rf_panorama_photos_90_deg',
+      'rf_panorama_photos_120_deg',
+      'rf_panorama_photos_150_deg',
+      'rf_panorama_photos_180_deg',
+      'rf_panorama_photos_210_deg',
+      'rf_panorama_photos_240_deg',
+      'rf_panorama_photos_270_deg',
+      'rf_panorama_photos_300_deg',
+      'rf_panorama_photos_330_deg',
+      'night_beacon_picture',
+      'lightening_rods'
     ];
+  }
+
+  // Get dynamic categories based on empty mounts count
+  getDynamicCategories(emptyMountsCount = 0) {
+    const baseCategories = this.getAvailableCategories();
+    const dynamicCategories = [];
+    
+    // Add dynamic empty mount photo categories
+    for (let i = 1; i <= emptyMountsCount; i++) {
+      dynamicCategories.push(`empty_mount_side_arm_${i}_photo`);
+    }
+    
+    return [...baseCategories, ...dynamicCategories];
   }
 
   /**

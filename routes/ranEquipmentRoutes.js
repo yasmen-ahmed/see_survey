@@ -1,6 +1,26 @@
 const express = require('express');
 const router = express.Router();
+const multer = require('multer');
 const RanEquipmentService = require('../services/RanEquipmentService');
+const RanEquipmentImageService = require('../services/RanEquipmentImageService');
+const upload = multer({ storage: multer.memoryStorage() });
+
+// Helper function to generate dynamic upload fields
+const getDynamicUploadFields = (maxBTS = 10) => {
+  const fields = [];
+  
+  // Add dynamic BTS photo fields based on count
+  for (let i = 1; i <= maxBTS; i++) {
+    fields.push(
+      { name: `bts_${i}_photos_front`, maxCount: 1 },
+      { name: `bts_${i}_photos_back`, maxCount: 1 },
+      { name: `bts_${i}_photos_left_side`, maxCount: 1 },
+      { name: `bts_${i}_photos_right_side`, maxCount: 1 }
+    );
+  }
+
+  return fields;
+};
 
 /**
  * Main endpoint for RAN Equipment Info
@@ -24,10 +44,14 @@ router.route('/:session_id')
       }
       
       const data = await RanEquipmentService.getOrCreateBySessionId(session_id);
+      const images = await RanEquipmentImageService.getImagesBySessionId(session_id);
       
       res.json({
         success: true,
-        data
+        data: {
+          ...data,
+          images
+        }
       });
       
     } catch (error) {
@@ -40,10 +64,11 @@ router.route('/:session_id')
       });
     }
   })
-  .put(async (req, res) => {
+  .put(upload.fields(getDynamicUploadFields()), async (req, res) => {
     try {
       const { session_id } = req.params;
       const updateData = req.body;
+      const files = req.files;
       
       // Validate session_id parameter
       if (!session_id || session_id.trim() === '') {
@@ -67,11 +92,58 @@ router.route('/:session_id')
         });
       }
       
-      const data = await RanEquipmentService.getOrCreateBySessionId(session_id, updateData);
+      // Parse the form data
+      let parsedData = {};
+      try {
+        if (updateData.data) {
+          parsedData = JSON.parse(updateData.data);
+        } else {
+          parsedData = updateData;
+        }
+      } catch (parseError) {
+        console.error('Error parsing form data:', parseError);
+        return res.status(400).json({
+          success: false,
+          error: {
+            type: 'VALIDATION_ERROR',
+            message: 'Invalid data format'
+          }
+        });
+      }
+
+      console.log('Parsed data to update:', parsedData);
+      
+      // Update the RAN equipment data first
+      const result = await RanEquipmentService.getOrCreateBySessionId(session_id, parsedData);
+      
+      // Handle image uploads if any
+      const uploadedImages = [];
+      if (files) {
+        for (const [category, fileArray] of Object.entries(files)) {
+          if (fileArray && fileArray.length > 0) {
+            try {
+              const uploadedImage = await RanEquipmentImageService.replaceImage({
+                file: fileArray[0],
+                session_id: session_id,
+                image_category: category
+              });
+              uploadedImages.push(uploadedImage);
+            } catch (imageError) {
+              console.error(`Error uploading image for category ${category}:`, imageError);
+            }
+          }
+        }
+      }
+      
+      // Get all images after updates
+      const images = await RanEquipmentImageService.getImagesBySessionId(session_id);
       
       res.json({
         success: true,
-        data,
+        data: {
+          ...result,
+          images
+        },
         message: 'RAN equipment info updated successfully'
       });
       
@@ -296,6 +368,48 @@ router.get('/:session_id/by-vendor', async (req, res) => {
     
   } catch (error) {
     console.error('RAN Equipment By Vendor Error:', error);
+    
+    const statusCode = error.type === 'VALIDATION_ERROR' ? 400 : 500;
+    res.status(statusCode).json({
+      success: false,
+      error
+    });
+  }
+});
+
+/**
+ * Get technology options from Site Information
+ * Returns technology options based on what was selected in Site Information form
+ */
+router.get('/:session_id/technology-options', async (req, res) => {
+  try {
+    const { session_id } = req.params;
+    
+    // Validate session_id parameter
+    if (!session_id || session_id.trim() === '') {
+      return res.status(400).json({
+        success: false,
+        error: {
+          type: 'INVALID_PARAMETER',
+          message: 'session_id is required'
+        }
+      });
+    }
+    
+    const technologyOptions = await RanEquipmentService.getTechnologyOptions(session_id);
+    
+    res.json({
+      success: true,
+      data: {
+        session_id: session_id,
+        technology_options: technologyOptions,
+        total_options: technologyOptions.length,
+        source: 'site_information'
+      }
+    });
+    
+  } catch (error) {
+    console.error('RAN Equipment Technology Options Error:', error);
     
     const statusCode = error.type === 'VALIDATION_ERROR' ? 400 : 500;
     res.status(statusCode).json({
