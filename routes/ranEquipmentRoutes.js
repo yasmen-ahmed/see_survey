@@ -2,7 +2,7 @@ const express = require('express');
 const router = express.Router();
 const multer = require('multer');
 const RanEquipmentService = require('../services/RanEquipmentService');
-const RanEquipmentImageService = require('../services/RanEquipmentImageService');
+const RanEquipmentImageService = require('../services/RANEquipmentImageService');
 const upload = multer({ storage: multer.memoryStorage() });
 
 // Helper function to generate dynamic upload fields
