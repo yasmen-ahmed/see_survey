@@ -47,9 +47,20 @@ router.post('/register', async (req, res) => {
       title
     });
 
-    // Generate JWT token (without role for now)
+    // Get user roles from the new role system
+    let userRoles = [];
+    try {
+      userRoles = await user.getRoles();
+    } catch (error) {
+      console.log('No roles found for user:', user.id);
+    }
+
+    // Get the primary role (first role or default)
+    const primaryRole = userRoles.length > 0 ? userRoles[0].name : 'user';
+
+    // Generate JWT token with role
     const token = jwt.sign(
-      { userId: user.id, username: user.username },
+      { userId: user.id, username: user.username, role: primaryRole },
       process.env.JWT_SECRET || 'your-secret-key',
       { expiresIn: '24h' }
     );
@@ -63,7 +74,13 @@ router.post('/register', async (req, res) => {
         email: user.email,
         firstName: user.firstName,
         lastName: user.lastName,
-        title: user.title
+        title: user.title,
+        role: primaryRole,
+        roles: userRoles.map(role => ({
+          id: role.id,
+          name: role.name,
+          description: role.description
+        }))
       }
     });
   } catch (error) {

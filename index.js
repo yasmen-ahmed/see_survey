@@ -87,6 +87,7 @@ const userManagementRoutes = require('./routes/userManagementRoutes');
 // Define Sequelize model associations
 const User = require('./models/User');
 const Survey = require('./models/Survey');
+const SurveyStatusHistory = require('./models/SurveyStatusHistory');
 const SiteVisitInfo = require('./models/SiteVisitInfo');
 const TransmissionMW = require('./models/TransmissionMW');
 const DCPowerSystem = require('./models/DCPowerSystem');
@@ -157,6 +158,10 @@ Survey.hasOne(HealthSafetySiteAccess, { foreignKey: 'session_id', sourceKey: 'se
 HealthSafetySiteAccess.belongsTo(Survey, { foreignKey: 'session_id', targetKey: 'session_id', constraints: false });
 Survey.hasOne(HealthSafetyBTSAccess, { foreignKey: 'session_id', sourceKey: 'session_id', as: 'healthSafetyBTSAccess', constraints: false });
 HealthSafetyBTSAccess.belongsTo(Survey, { foreignKey: 'session_id', targetKey: 'session_id', constraints: false });
+
+// Survey Status History associations
+Survey.hasMany(SurveyStatusHistory, { foreignKey: 'session_id', sourceKey: 'session_id', as: 'statusHistory' });
+SurveyStatusHistory.belongsTo(Survey, { foreignKey: 'session_id', targetKey: 'session_id' });
 
 // Hierarchical associations: MU -> Country -> CT -> Project -> Company
 MU.hasMany(Country, { foreignKey: 'mu_id', as: 'countries' });
