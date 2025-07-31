@@ -3,7 +3,12 @@ const router = express.Router();
 const Survey = require('../models/Survey');
 const SiteLocation = require('../models/SiteLocation');
 const User = require('../models/User');
-const Project = require('../models/Project');
+
+   const Country = require('../models/Country');
+   const CT = require('../models/CT');
+   const Project = require('../models/Project');
+   const Company = require('../models/Company');
+   const MU = require('../models/MU');
 const UserProject = require('../models/UserProject');
 const SurveyStatusHistory = require('../models/SurveyStatusHistory');
 const authenticateToken = require('../middleware/authMiddleware');
@@ -39,62 +44,486 @@ router.get('/test-auth', authenticateToken, async (req, res) => {
   }
 });
 
-// Test endpoint to check coordinator projects
-router.get('/test-coordinator-projects', authenticateToken, async (req, res) => {
+// Get current user's projects and related surveys with role-based filtering
+router.get('/my-projects', authenticateToken, async (req, res) => {
   try {
     const userId = req.user.id;
     const userRole = req.user.role;
     
-    console.log('Testing coordinator projects for user:', { userId, userRole });
+    console.log('Getting projects and surveys for current user:', userId);
+    console.log('User role:', userRole);
     
-    if (userRole !== 'coordinator') {
-      return res.json({ message: 'User is not a coordinator', userRole });
+    let userProjects = [];
+    let surveys = [];
+    let projectNames = [];
+    let projectIds = [];
+    
+    // Role-based filtering logic
+    switch (userRole) {
+      case 'admin':
+        console.log('Admin role: Getting ALL projects and surveys');
+        
+        // Admin can see all projects
+        const allProjects = await Project.findAll({
+          where: { is_active: true },
+          attributes: ['id', 'name', 'code', 'status', 'client']
+        });
+        
+        userProjects = allProjects.map(project => ({
+          userProjectId: null, // Admin doesn't have userProjectId for all projects
+          projectId: project.id,
+          projectName: project.name,
+          projectCode: project.code,
+          projectStatus: project.status,
+          projectClient: project.client,
+          isActive: true
+        }));
+        
+        projectNames = allProjects.map(p => p.name);
+        projectIds = allProjects.map(p => p.id);
+        
+        // Get all surveys for all projects
+        surveys = await Survey.findAll({
+          include: [
+            { model: User, as: 'user', attributes: { exclude: ['password'] } },
+            { model: User, as: 'createdBy', attributes: { exclude: ['password'] } }
+          ],
+          order: [['created_at', 'DESC']]
+        });
+        
+        break;
+        
+      case 'coordinator':
+        console.log('Coordinator role: Getting projects assigned to user and their surveys');
+        
+        // Get projects assigned to this user
+        const coordinatorUserProjects = await UserProject.findAll({
+          where: { 
+            user_id: userId, 
+            is_active: true 
+          },
+          include: [{ 
+            model: Project, 
+            as: 'project', 
+            where: { is_active: true },
+            attributes: ['id', 'name', 'code', 'status', 'client']
+          }]
+        });
+        
+        userProjects = coordinatorUserProjects.map(up => ({
+          userProjectId: up.id,
+          projectId: up.project.id,
+          projectName: up.project.name,
+          projectCode: up.project.code,
+          projectStatus: up.project.status,
+          projectClient: up.project.client,
+          isActive: up.is_active
+        }));
+        
+        projectNames = coordinatorUserProjects.map(up => up.project.name);
+        projectIds = coordinatorUserProjects.map(up => up.project.id);
+        
+        // Get all surveys for these projects (any user can be assigned)
+        if (projectNames.length > 0) {
+          surveys = await Survey.findAll({
+            where: {
+              project: { [Op.in]: projectNames }
+            },
+            include: [
+              { model: User, as: 'user', attributes: { exclude: ['password'] } },
+              { model: User, as: 'createdBy', attributes: { exclude: ['password'] } }
+            ],
+            order: [['created_at', 'DESC']]
+          });
+        }
+        
+        break;
+        
+      case 'survey_engineer':
+        console.log('Survey Engineer role: Getting only surveys assigned to this engineer');
+        
+        // Get projects assigned to this user (for display purposes)
+        const engineerUserProjects = await UserProject.findAll({
+          where: { 
+            user_id: userId, 
+            is_active: true 
+          },
+          include: [{ 
+            model: Project, 
+            as: 'project', 
+            where: { is_active: true },
+            attributes: ['id', 'name', 'code', 'status', 'client']
+          }]
+        });
+        
+        userProjects = engineerUserProjects.map(up => ({
+          userProjectId: up.id,
+          projectId: up.project.id,
+          projectName: up.project.name,
+          projectCode: up.project.code,
+          projectStatus: up.project.status,
+          projectClient: up.project.client,
+          isActive: up.is_active
+        }));
+        
+        projectNames = engineerUserProjects.map(up => up.project.name);
+        projectIds = engineerUserProjects.map(up => up.project.id);
+        
+        // Get ONLY surveys that this engineer is assigned to
+        surveys = await Survey.findAll({
+          where: {
+            user_id: userId // Only surveys assigned to this engineer
+          },
+          include: [
+            { model: User, as: 'user', attributes: { exclude: ['password'] } },
+            { model: User, as: 'createdBy', attributes: { exclude: ['password'] } }
+          ],
+          order: [['created_at', 'DESC']]
+        });
+        
+        break;
+        
+      default:
+        return res.status(400).json({ 
+          error: 'Invalid role. Must be admin, coordinator, survey_engineer, or approver' 
+        });
     }
     
-    // Get user's assigned projects
-    const userProjects = await UserProject.findAll({
-      where: { user_id: userId, is_active: true },
-      include: [{ model: Project, as: 'project', where: { is_active: true } }]
-    });
+    console.log('User projects found:', userProjects.length);
+    console.log('Surveys found:', surveys.length);
     
-    // Get all surveys to see what projects exist
-    const allSurveys = await Survey.findAll({
-      attributes: ['project'],
-      group: ['project']
-    });
-    
-    // Get all surveys with full details
-    const allSurveysFull = await Survey.findAll({
-      include: [
-        { model: User, as: 'user', attributes: { exclude: ['password'] } },
-        { model: User, as: 'createdBy', attributes: { exclude: ['password'] } }
-      ]
-    });
-    
+    // Return comprehensive response
     res.json({
-      message: 'Coordinator projects test',
+      message: 'User projects and related surveys retrieved successfully',
       userId,
       userRole,
-      userProjects: userProjects.map(up => ({
-        userProjectId: up.id,
-        projectId: up.project_id,
-        projectName: up.project?.name,
-        isActive: up.is_active
+      projects: userProjects,
+      surveys: surveys.map(survey => ({
+        session_id: survey.session_id,
+        site_id: survey.site_id,
+        project: survey.project,
+        country: survey.country,
+        ct: survey.ct,
+        company: survey.company,
+        TSSR_Status: survey.TSSR_Status,
+        created_at: survey.created_at,
+        user: survey.user ? {
+          id: survey.user.id,
+          username: survey.user.username,
+          email: survey.user.email
+        } : null,
+        createdBy: survey.createdBy ? {
+          id: survey.createdBy.id,
+          username: survey.createdBy.username,
+          email: survey.createdBy.email
+        } : null
       })),
-      projectNames: userProjects.map(up => up.project?.name),
-      allSurveyProjects: allSurveys.map(s => s.project),
-      allSurveys: allSurveysFull.map(s => ({
-        session_id: s.session_id,
-        project: s.project,
-        createdBy: s.createdBy?.username,
-        assignedTo: s.user?.username
-      }))
+      summary: {
+        totalProjects: userProjects.length,
+        totalSurveys: surveys.length,
+        projectNames: projectNames,
+        role: userRole,
+        filteringLogic: userRole === 'admin' ? 'All projects and surveys' :
+                        userRole === 'coordinator' ? 'Projects assigned to user + all surveys for those projects' :
+                        userRole === 'survey_engineer' ? 'Only surveys assigned to this engineer' :
+                        'Submitted surveys from projects assigned to user'
+      }
     });
+    
   } catch (error) {
-    console.error('Test coordinator projects error:', error);
+    console.error('Error getting user projects and surveys:', error);
     res.status(500).json({ error: error.message });
   }
 });
+
+// Get user projects and related surveys (by userId parameter) with role-based filtering
+router.get('/user-projects/:userId', authenticateToken, async (req, res) => {
+  try {
+    const { userId } = req.params;
+    const userRole = req.user.role;
+    const requestingUserId = req.user.id;
+    
+    console.log('Getting projects and surveys for user:', userId);
+    console.log('Requesting user role:', userRole);
+    console.log('Requesting user ID:', requestingUserId);
+    
+    let userProjects = [];
+    let surveys = [];
+    let projectNames = [];
+    let projectIds = [];
+    
+    // Role-based filtering logic
+    switch (userRole) {
+      case 'admin':
+        console.log('Admin role: Getting ALL projects and surveys');
+        
+        // Admin can see all projects
+        const allProjects = await Project.findAll({
+          where: { is_active: true },
+          attributes: ['id', 'name', 'code', 'status', 'client']
+        });
+        
+        userProjects = allProjects.map(project => ({
+          userProjectId: null, // Admin doesn't have userProjectId for all projects
+          projectId: project.id,
+          projectName: project.name,
+          projectCode: project.code,
+          projectStatus: project.status,
+          projectClient: project.client,
+          isActive: true
+        }));
+        
+        projectNames = allProjects.map(p => p.name);
+        projectIds = allProjects.map(p => p.id);
+        
+        // Get all surveys for all projects
+        surveys = await Survey.findAll({
+          include: [
+            { model: User, as: 'user', attributes: { exclude: ['password'] } },
+            { model: User, as: 'createdBy', attributes: { exclude: ['password'] } }
+          ],
+          order: [['created_at', 'DESC']]
+        });
+        
+        break;
+        
+      case 'coordinator':
+        console.log('Coordinator role: Getting projects assigned to user and their surveys');
+        
+        // Get projects assigned to this specific user
+        const coordinatorUserProjects = await UserProject.findAll({
+          where: { 
+            user_id: userId, 
+            is_active: true 
+          },
+          include: [{ 
+            model: Project, 
+            as: 'project', 
+            where: { is_active: true },
+            attributes: ['id', 'name', 'code', 'status', 'client']
+          }]
+        });
+        
+        userProjects = coordinatorUserProjects.map(up => ({
+          userProjectId: up.id,
+          projectId: up.project.id,
+          projectName: up.project.name,
+          projectCode: up.project.code,
+          projectStatus: up.project.status,
+          projectClient: up.project.client,
+          isActive: up.is_active
+        }));
+        
+        projectNames = coordinatorUserProjects.map(up => up.project.name);
+        projectIds = coordinatorUserProjects.map(up => up.project.id);
+        
+        // Get all surveys for these projects (any user can be assigned)
+        if (projectNames.length > 0) {
+          surveys = await Survey.findAll({
+            where: {
+              project: { [Op.in]: projectNames }
+            },
+            include: [
+              { model: User, as: 'user', attributes: { exclude: ['password'] } },
+              { model: User, as: 'createdBy', attributes: { exclude: ['password'] } }
+            ],
+            order: [['created_at', 'DESC']]
+          });
+        }
+        
+        break;
+        
+      case 'survey_engineer':
+        console.log('Survey Engineer role: Getting only surveys assigned to this engineer');
+        
+        // Get projects assigned to this specific user (for display purposes)
+        const engineerUserProjects = await UserProject.findAll({
+          where: { 
+            user_id: userId, 
+            is_active: true 
+          },
+          include: [{ 
+            model: Project, 
+            as: 'project', 
+            where: { is_active: true },
+            attributes: ['id', 'name', 'code', 'status', 'client']
+          }]
+        });
+        
+        userProjects = engineerUserProjects.map(up => ({
+          userProjectId: up.id,
+          projectId: up.project.id,
+          projectName: up.project.name,
+          projectCode: up.project.code,
+          projectStatus: up.project.status,
+          projectClient: up.project.client,
+          isActive: up.is_active
+        }));
+        
+        projectNames = engineerUserProjects.map(up => up.project.name);
+        projectIds = engineerUserProjects.map(up => up.project.id);
+        
+        // Get ONLY surveys that this engineer is assigned to
+        surveys = await Survey.findAll({
+          where: {
+            user_id: userId // Only surveys assigned to this engineer
+          },
+          include: [
+            { model: User, as: 'user', attributes: { exclude: ['password'] } },
+            { model: User, as: 'createdBy', attributes: { exclude: ['password'] } }
+          ],
+          order: [['created_at', 'DESC']]
+        });
+        
+        break;
+        
+      case 'approver':
+        console.log('Approver role: Getting submitted and review surveys from projects assigned to user');
+        
+        // Get projects assigned to this specific user
+        const approverUserProjects = await UserProject.findAll({
+          where: { 
+            user_id: userId, 
+            is_active: true 
+          },
+          include: [{ 
+            model: Project, 
+            as: 'project', 
+            where: { is_active: true },
+            attributes: ['id', 'name', 'code', 'status', 'client']
+          }]
+        });
+        
+        userProjects = approverUserProjects.map(up => ({
+          userProjectId: up.id,
+          projectId: up.project.id,
+          projectName: up.project.name,
+          projectCode: up.project.code,
+          projectStatus: up.project.status,
+          projectClient: up.project.client,
+          isActive: up.is_active
+        }));
+        
+        projectNames = approverUserProjects.map(up => up.project.name);
+        projectIds = approverUserProjects.map(up => up.project.id);
+        
+        if (projectNames.length > 0) {
+          // Get current user's username for filtering
+          const currentUser = await User.findByPk(requestingUserId);
+          const currentUsername = currentUser ? currentUser.username : '';
+          
+          console.log('Current approver username:', currentUsername);
+          
+          // Get surveys that are submitted from projects this approver is assigned to
+          const submittedSurveys = await Survey.findAll({
+            where: {
+              project: { [Op.in]: projectNames },
+              TSSR_Status: 'submitted'
+            },
+            include: [
+              { model: User, as: 'user', attributes: { exclude: ['password'] } },
+              { model: User, as: 'createdBy', attributes: { exclude: ['password'] } }
+            ],
+            order: [['created_at', 'DESC']]
+          });
+          
+          // Get surveys that are review AND were changed to review by this specific approver
+          const reviewSurveys = await Survey.findAll({
+            where: {
+              project: { [Op.in]: projectNames },
+              TSSR_Status: 'review'
+            },
+            include: [
+              { model: User, as: 'user', attributes: { exclude: ['password'] } },
+              { model: User, as: 'createdBy', attributes: { exclude: ['password'] } }
+            ],
+            order: [['created_at', 'DESC']]
+          });
+          
+          // Filter review surveys to only include those changed by this approver
+          const filteredReviewSurveys = [];
+          
+          for (const survey of reviewSurveys) {
+            // Check if this survey was changed to 'review' by the current approver
+            const statusHistory = await SurveyStatusHistory.findOne({
+              where: {
+                session_id: survey.session_id,
+                new_status: 'review',
+                username: currentUsername
+              },
+              order: [['changed_at', 'DESC']]
+            });
+            
+            if (statusHistory) {
+              // This survey was changed to 'review' by the current approver
+              filteredReviewSurveys.push(survey);
+            }
+          }
+          
+          // Combine both sets of surveys
+          surveys = [...submittedSurveys, ...filteredReviewSurveys];
+          
+          console.log('Submitted surveys found:', submittedSurveys.length);
+          console.log('Review surveys found (total):', reviewSurveys.length);
+          console.log('Review surveys filtered (by this approver):', filteredReviewSurveys.length);
+          console.log('Total surveys for approver:', surveys.length);
+        }
+        
+        break;
+        
+      default:
+        return res.status(400).json({ 
+          error: 'Invalid role. Must be admin, coordinator, survey_engineer, or approver' 
+        });
+    }
+    
+    console.log('User projects found:', userProjects.length);
+    console.log('Surveys found:', surveys.length);
+    
+    // Return comprehensive response
+    res.json({
+      message: 'User projects and related surveys retrieved successfully',
+      userId,
+      userRole,
+      projects: userProjects,
+      surveys: surveys.map(survey => ({
+        session_id: survey.session_id,
+        site_id: survey.site_id,
+        project: survey.project,
+        country: survey.country,
+        ct: survey.ct,
+        company: survey.company,
+        TSSR_Status: survey.TSSR_Status,
+        created_at: survey.created_at,
+        user: survey.user ? {
+          id: survey.user.id,
+          username: survey.user.username,
+          email: survey.user.email
+        } : null,
+        createdBy: survey.createdBy ? {
+          id: survey.createdBy.id,
+          username: survey.createdBy.username,
+          email: survey.createdBy.email
+        } : null
+      })),
+      summary: {
+        totalProjects: userProjects.length,
+        totalSurveys: surveys.length,
+        projectNames: projectNames,
+        role: userRole,
+        filteringLogic: userRole === 'admin' ? 'All projects and surveys' :
+                        userRole === 'coordinator' ? 'Projects assigned to user + all surveys for those projects' :
+                        userRole === 'survey_engineer' ? 'Only surveys assigned to this engineer' :
+                        'Submitted surveys from projects assigned to user'
+      }
+    });
+    
+  } catch (error) {
+    console.error('Error getting user projects and surveys:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
 
 // Get all surveys with role-based filtering (no authentication required)
 router.get('/role/:role', async (req, res) => {
@@ -191,10 +620,141 @@ router.get('/role/:role', async (req, res) => {
       
       const surveys = await Survey.findAll({
         where: whereClause,
+        attributes: [
+          'site_id', 'session_id', 'user_id', 'creator_id', 'created_at',
+          'country', 'ct', 'project', 'company', 'TSSR_Status'
+        ],
         order: [['created_at', 'DESC']]
       });
 
       console.log('Surveys found (without include):', surveys.length);
+      
+      // If we don't have includes, we need to manually fetch user data
+      if (surveys.length > 0) {
+        const userIds = [...new Set([
+          ...surveys.map(s => s.user_id),
+          ...surveys.map(s => s.creator_id)
+        ])].filter(id => id != null);
+        
+        if (userIds.length > 0) {
+          const users = await User.findAll({
+            where: { id: { [Op.in]: userIds } },
+            attributes: ['id', 'username', 'email']
+          });
+          
+          const userMap = {};
+          users.forEach(user => {
+            userMap[user.id] = user;
+          });
+          
+          // Add user data to surveys
+          surveys = surveys.map(survey => {
+            const surveyData = survey.toJSON ? survey.toJSON() : survey;
+            return {
+              ...surveyData,
+              user: userMap[survey.user_id] || null,
+              createdBy: userMap[survey.creator_id] || null
+            };
+          });
+        }
+      }
+      
+   
+
+      // Enhance surveys with lookup data
+      if (surveys.length > 0) {
+        const allCountries = new Set();
+        const allCTs = new Set();
+        const allProjects = new Set();
+        const allCompanies = new Set();
+
+        surveys.forEach(survey => {
+          if (survey.country) allCountries.add(survey.country);
+          if (survey.ct) allCTs.add(survey.ct);
+          if (survey.project) allProjects.add(survey.project);
+          if (survey.company) allCompanies.add(survey.company);
+        });
+
+        // Fetch all lookup data
+        const [countries, cts, projects, companies] = await Promise.all([
+          Country.findAll({ where: { name: { [Op.in]: Array.from(allCountries) } } }),
+          CT.findAll({ where: { name: { [Op.in]: Array.from(allCTs) } } }),
+          Project.findAll({ where: { name: { [Op.in]: Array.from(allProjects) } } }),
+          Company.findAll({ where: { name: { [Op.in]: Array.from(allCompanies) } } })
+        ]);
+
+        // Create lookup maps
+        const countryMap = {};
+        const ctMap = {};
+        const projectMap = {};
+        const companyMap = {};
+
+        countries.forEach(country => {
+          countryMap[country.name] = country;
+        });
+        cts.forEach(ct => {
+          ctMap[ct.name] = ct;
+        });
+        projects.forEach(project => {
+          projectMap[project.name] = project;
+        });
+        companies.forEach(company => {
+          companyMap[company.name] = company;
+        });
+
+        // Get MU data for countries
+        const countryIds = [...new Set(countries.map(c => c.mu_id))];
+        const mus = await MU.findAll({ where: { id: { [Op.in]: countryIds } } });
+        const muMap = {};
+        mus.forEach(mu => {
+          muMap[mu.id] = mu;
+        });
+
+        // Enhance each survey with lookup data
+        surveys = surveys.map(survey => {
+          const surveyData = survey.toJSON ? survey.toJSON() : survey;
+          const country = countryMap[survey.country];
+          const ct = ctMap[survey.ct];
+          const project = projectMap[survey.project];
+          const company = companyMap[survey.company];
+
+          return {
+            ...surveyData,
+            // Add lookup data
+            countryData: country ? {
+              id: country.id,
+              name: country.name,
+              code: country.code,
+              mu_id: country.mu_id,
+              mu: muMap[country.mu_id] ? {
+                id: muMap[country.mu_id].id,
+                name: muMap[country.mu_id].name
+              } : null
+            } : null,
+            ctData: ct ? {
+              id: ct.id,
+              name: ct.name,
+              code: ct.code,
+              country_id: ct.country_id
+            } : null,
+            projectData: project ? {
+              id: project.id,
+              name: project.name,
+              code: project.code,
+              ct_id: project.ct_id,
+              status: project.status,
+              client: project.client
+            } : null,
+            companyData: company ? {
+              id: company.id,
+              name: company.name,
+              code: company.code,
+              project_id: company.project_id
+            } : null
+          };
+        });
+      }
+
       res.json(surveys);
     }
 
@@ -273,19 +833,68 @@ router.get('/', authenticateToken, async (req, res) => {
         
       case 'survey_engineer':
         // Survey Engineer can see surveys they created or are assigned to
+        // Only show surveys with status 'created' and 'rework'
         whereClause = {
-          [Op.or]: [
-            { creator_id: userId },
-            { user_id: userId }
+          [Op.and]: [
+            {
+              [Op.or]: [
+                { creator_id: userId },
+                { user_id: userId }
+              ]
+            },
+            {
+              TSSR_Status: {
+                [Op.ne]: 'done' 
+              }
+            }
           ]
         };
         break;
         
-      case 'approver':
-        // Approver can see surveys with status 'submitted' or 'review'
-        whereClause.TSSR_Status = { [Op.in]: ['submitted', 'review'] };
-        break;
-        
+        case 'approver':
+          console.log('Approver role: Getting submitted and review surveys from projects assigned to user');
+          
+          // Get projects assigned to this specific user
+          const approverUserProjects = await UserProject.findAll({
+            where: { 
+              user_id: userId, 
+              is_active: true 
+            },
+            include: [{ 
+              model: Project, 
+              as: 'project', 
+              where: { is_active: true },
+              attributes: ['id', 'name', 'code', 'status', 'client']
+            }]
+          });
+          
+          userProjects = approverUserProjects.map(up => ({
+            userProjectId: up.id,
+            projectId: up.project.id,
+            projectName: up.project.name,
+            projectCode: up.project.code,
+            projectStatus: up.project.status,
+            projectClient: up.project.client,
+            isActive: up.is_active
+          }));
+          
+          projectNames = approverUserProjects.map(up => up.project.name);
+          projectIds = approverUserProjects.map(up => up.project.id);
+          
+          if (projectNames.length > 0) {
+            // Set up where clause for approver - they can see submitted and review surveys from their projects
+            whereClause = {
+              project: { [Op.in]: projectNames },
+              TSSR_Status: { [Op.in]: ['submitted', 'review', 'done'] }
+            };
+            console.log('Where clause for approver:', whereClause);
+          } else {
+            console.log('No projects assigned to approver, returning empty array');
+            return res.json([]);
+          }
+          
+          break;
+          
       default:
         // Default: show all surveys (fallback)
         break;
@@ -307,13 +916,47 @@ router.get('/', authenticateToken, async (req, res) => {
       console.log('Query with includes successful');
     } catch (error) {
       console.log('Query with includes failed:', error.message);
-      // Try without includes
+      // Try without includes but ensure we get all necessary fields
       console.log('Trying without includes...');
       surveys = await Survey.findAll({
         where: whereClause,
+        attributes: [
+          'site_id', 'session_id', 'user_id', 'creator_id', 'created_at',
+          'country', 'ct', 'project', 'company', 'TSSR_Status'
+        ],
         order: [['created_at', 'DESC']]
       });
       console.log('Query without includes successful');
+      
+      // If we don't have includes, we need to manually fetch user data
+      if (surveys.length > 0) {
+        const userIds = [...new Set([
+          ...surveys.map(s => s.user_id),
+          ...surveys.map(s => s.creator_id)
+        ])].filter(id => id != null);
+        
+        if (userIds.length > 0) {
+          const users = await User.findAll({
+            where: { id: { [Op.in]: userIds } },
+            attributes: ['id', 'username', 'email']
+          });
+          
+          const userMap = {};
+          users.forEach(user => {
+            userMap[user.id] = user;
+          });
+          
+          // Add user data to surveys
+          surveys = surveys.map(survey => {
+            const surveyData = survey.toJSON ? survey.toJSON() : survey;
+            return {
+              ...surveyData,
+              user: userMap[survey.user_id] || null,
+              createdBy: userMap[survey.creator_id] || null
+            };
+          });
+        }
+      }
     }
 
     console.log('Surveys found:', surveys.length);
@@ -324,6 +967,163 @@ router.get('/', authenticateToken, async (req, res) => {
       user_id: s.user_id,
       creator_id: s.creator_id
     })));
+
+
+
+    // Enhance surveys with lookup data
+    if (surveys.length > 0) {
+      // Get all unique values to minimize database queries
+      const allCountries = new Set();
+      const allCTs = new Set();
+      const allProjects = new Set();
+      const allCompanies = new Set();
+
+      surveys.forEach(survey => {
+        if (survey.country) allCountries.add(survey.country);
+        if (survey.ct) allCTs.add(survey.ct);
+        if (survey.project) allProjects.add(survey.project);
+        if (survey.company) allCompanies.add(survey.company);
+      });
+
+      // Fetch all lookup data
+      const [countries, cts, projects, companies] = await Promise.all([
+        Country.findAll({ where: { name: { [Op.in]: Array.from(allCountries) } } }),
+        CT.findAll({ where: { name: { [Op.in]: Array.from(allCTs) } } }),
+        Project.findAll({ where: { name: { [Op.in]: Array.from(allProjects) } } }),
+        Company.findAll({ where: { name: { [Op.in]: Array.from(allCompanies) } } })
+      ]);
+
+      // Create lookup maps
+      const countryMap = {};
+      const ctMap = {};
+      const projectMap = {};
+      const companyMap = {};
+
+      countries.forEach(country => {
+        countryMap[country.name] = country;
+      });
+      cts.forEach(ct => {
+        ctMap[ct.name] = ct;
+      });
+      projects.forEach(project => {
+        projectMap[project.name] = project;
+      });
+      companies.forEach(company => {
+        companyMap[company.name] = company;
+      });
+
+      // Get MU data for countries
+      const countryIds = [...new Set(countries.map(c => c.mu_id))];
+      const mus = await MU.findAll({ where: { id: { [Op.in]: countryIds } } });
+      const muMap = {};
+      mus.forEach(mu => {
+        muMap[mu.id] = mu;
+      });
+
+      // Enhance each survey with lookup data
+      surveys = surveys.map(survey => {
+        const surveyData = survey.toJSON ? survey.toJSON() : survey;
+        const country = countryMap[survey.country];
+        const ct = ctMap[survey.ct];
+        const project = projectMap[survey.project];
+        const company = companyMap[survey.company];
+
+        return {
+          ...surveyData,
+          // Add lookup data
+          countryData: country ? {
+            id: country.id,
+            name: country.name,
+            code: country.code,
+            mu_id: country.mu_id,
+            mu: muMap[country.mu_id] ? {
+              id: muMap[country.mu_id].id,
+              name: muMap[country.mu_id].name
+            } : null
+          } : null,
+          ctData: ct ? {
+            id: ct.id,
+            name: ct.name,
+            code: ct.code,
+            country_id: ct.country_id
+          } : null,
+          projectData: project ? {
+            id: project.id,
+            name: project.name,
+            code: project.code,
+            ct_id: project.ct_id,
+            status: project.status,
+            client: project.client
+          } : null,
+          companyData: company ? {
+            id: company.id,
+            name: company.name,
+            code: company.code,
+            project_id: company.project_id
+          } : null
+        };
+      });
+    }
+
+    // Special filtering for approver role - filter review surveys to only show those changed by this approver
+    if (userRole === 'approver' && surveys.length > 0) {
+      console.log('Applying approver-specific filtering for review surveys');
+      
+      // Get current user's username for filtering
+      const currentUser = await User.findByPk(userId);
+      const currentUsername = currentUser ? currentUser.username : '';
+      
+      console.log('Current approver username for filtering:', currentUsername);
+      
+      // Filter surveys to only include review surveys that were changed by this approver
+      const filteredSurveys = [];
+      
+      for (const survey of surveys) {
+        if (survey.TSSR_Status === 'submitted') {
+          // Include all submitted surveys
+          filteredSurveys.push(survey);
+        } else if (survey.TSSR_Status === 'review') {
+          // For review surveys, check if this approver changed the status
+          const statusHistory = await SurveyStatusHistory.findOne({
+            where: {
+              session_id: survey.session_id,
+              new_status: 'review',
+              username: currentUsername
+            },
+            order: [['changed_at', 'DESC']]
+          });
+          
+          if (statusHistory) {
+            // This survey was changed to 'review' by the current approver
+            filteredSurveys.push(survey);
+            console.log(`Including review survey ${survey.session_id} - changed by ${currentUsername}`);
+          } else {
+            console.log(`Excluding review survey ${survey.session_id} - not changed by ${currentUsername}`);
+          }
+        } else {
+          // Include surveys with other statuses
+          filteredSurveys.push(survey);
+        }
+      }
+      
+      surveys = filteredSurveys;
+      console.log(`Approver filtering complete: ${filteredSurveys.length} surveys remaining out of ${surveys.length} total`);
+    }
+
+    // Add rework flag for survey_engineer role
+    if (userRole === 'survey_engineer' && surveys.length > 0) {
+      console.log('Adding rework flag for survey engineer');
+      
+      surveys = surveys.map(survey => {
+        const surveyData = survey.toJSON ? survey.toJSON() : survey;
+        return {
+          ...surveyData,
+          isRework: surveyData.TSSR_Status === 'rework'
+        };
+      });
+      
+      console.log(`Added rework flag to ${surveys.length} surveys for survey engineer`);
+    }
 
     res.json(surveys);
   } catch (error) {
@@ -353,7 +1153,17 @@ router.get('/:siteId/:createdAt', async (req, res) => {
 // Create new survey
 router.post('/', authenticateToken, async (req, res) => {
   try {
-    const { site_id, user_id, country, ct, project, company } = req.body;
+    const { site_id, user_id, country_id, ct_id, project_id, company_id, mu_id } = req.body;
+
+    console.log('Creating survey with payload:', req.body);
+
+    // Validate required fields
+    if (!site_id) {
+      return res.status(400).json({ error: 'site_id is required' });
+    }
+    if (!user_id) {
+      return res.status(400).json({ error: 'user_id is required' });
+    }
 
     // Validate selected user exists
     const selectedUser = await User.findByPk(user_id);
@@ -368,6 +1178,77 @@ router.post('/', authenticateToken, async (req, res) => {
     if (!creatorUser) {
       return res.status(401).json({ error: 'Invalid token user' });
     }
+
+
+
+    // Look up the actual values from the IDs
+    let countryName = '';
+    let ctName = '';
+    let projectName = '';
+    let companyName = '';
+
+    // Validate and fetch country
+    if (country_id) {
+      try {
+        const country = await Country.findByPk(country_id);
+        if (!country) {
+          return res.status(400).json({ error: `Country with ID ${country_id} not found` });
+        }
+        countryName = country.name;
+      } catch (error) {
+        console.log('Error fetching country:', error.message);
+        return res.status(400).json({ error: 'Invalid country ID' });
+      }
+    }
+
+    // Validate and fetch CT
+    if (ct_id) {
+      try {
+        const ct = await CT.findByPk(ct_id);
+        if (!ct) {
+          return res.status(400).json({ error: `CT with ID ${ct_id} not found` });
+        }
+        ctName = ct.name;
+      } catch (error) {
+        console.log('Error fetching CT:', error.message);
+        return res.status(400).json({ error: 'Invalid CT ID' });
+      }
+    }
+
+    // Validate and fetch project
+    if (project_id) {
+      try {
+        const project = await Project.findByPk(project_id);
+        if (!project) {
+          return res.status(400).json({ error: `Project with ID ${project_id} not found` });
+        }
+        projectName = project.name;
+      } catch (error) {
+        console.log('Error fetching project:', error.message);
+        return res.status(400).json({ error: 'Invalid project ID' });
+      }
+    }
+
+    // Validate and fetch company
+    if (company_id) {
+      try {
+        const company = await Company.findByPk(company_id);
+        if (!company) {
+          return res.status(400).json({ error: `Company with ID ${company_id} not found` });
+        }
+        companyName = company.name;
+      } catch (error) {
+        console.log('Error fetching company:', error.message);
+        return res.status(400).json({ error: 'Invalid company ID' });
+      }
+    }
+
+    console.log('Resolved values:', {
+      country: countryName,
+      ct: ctName,
+      project: projectName,
+      company: companyName
+    });
 
     // Check if site exists
     let site = await SiteLocation.findByPk(site_id);
@@ -396,14 +1277,17 @@ router.post('/', authenticateToken, async (req, res) => {
       user_id,
       creator_id,
       created_at: now,
-      country: country || '',
-      ct: ct || '',
-      project: project || '',
-      company: company || ''
+      country: countryName,
+      ct: ctName,
+      project: projectName,
+      company: companyName
     });
+
+    console.log('Survey created successfully:', survey.toJSON());
 
     res.status(201).json(survey);
   } catch (error) {
+    console.error('Error creating survey:', error);
     res.status(400).json({ error: error.message });
   }
 });
