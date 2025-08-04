@@ -13,7 +13,7 @@ const MU = sequelize.define('MU', {
     unique: true
   },
   code: {
-    type: DataTypes.STRING(3),
+    type: DataTypes.STRING(10),
     allowNull: false,
     unique: true
   }
