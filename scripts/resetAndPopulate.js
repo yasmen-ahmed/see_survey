@@ -234,8 +234,9 @@ const masterData = {
         { name: 'New Project', code: 'sa_p_2', ct: 'MEA SAU SAU CT Mobily Saudi' },
         { name: 'New Project', code: 'sa_p_3', ct: 'MEA SAU SAU CT ZAIN Saudi' },
         { name: 'New Project', code: 'sa_p_4', ct: 'MEA SAU STC Group CT STC' },
-        { name: 'New Project', code: 'sa_p_5', ct: 'MEA SAU STC Group CT STC Affiliates' },
-        { name: 'New Project', code: 'sa_p_6', ct: 'Saudi - Other CTs' },
+        { name: 'MC – Tawal', code: 'sa_p_5', ct: 'MEA SAU STC Group CT STC' },
+        { name: 'New Project', code: 'sa_p_6', ct: 'MEA SAU STC Group CT STC Affiliates' },
+        { name: 'New Project', code: 'sa_p_7', ct: 'Saudi - Other CTs' },
 
         // SAV Projects
         { name: 'New Project', code: 'sav_p_1', ct: 'MEA VFM VCINT CT Vodacom Tanzania & DRC' },

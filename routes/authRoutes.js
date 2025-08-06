@@ -3,6 +3,7 @@ const router = express.Router();
 const User = require('../models/User');
 const jwt = require('jsonwebtoken');
 const { Op } = require('sequelize');
+const authenticateToken = require('../middleware/authMiddleware');
 
 // Register new user
 router.post('/register', async (req, res) => {
@@ -149,6 +150,50 @@ router.post('/login', async (req, res) => {
           name: role.name,
           description: role.description
         }))
+      }
+    });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Refresh token with new role
+router.post('/refresh-token', authenticateToken, async (req, res) => {
+  try {
+    const { role } = req.body;
+    const userId = req.user.id;
+    const username = req.user.username;
+
+    // Verify the user has this role
+    const user = await User.findByPk(userId);
+    if (!user) {
+      return res.status(401).json({ error: 'User not found' });
+    }
+
+    // Check if user has the requested role
+    const userRoles = await user.getRoles();
+    const hasRole = userRoles.some(r => r.name === role);
+    
+    if (!hasRole) {
+      return res.status(403).json({ error: 'User does not have this role' });
+    }
+
+    // Generate new JWT token with the requested role
+    const token = jwt.sign(
+      { userId: user.id, username: user.username, role: role },
+      process.env.JWT_SECRET || 'your-secret-key',
+      { expiresIn: '24h' }
+    );
+
+    res.json({
+      message: 'Token refreshed successfully',
+      token,
+      user: {
+        id: user.id,
+        username: user.username,
+        firstName: user.firstName,
+        lastName: user.lastName,
+        role: role
       }
     });
   } catch (error) {

@@ -2,6 +2,9 @@ const User = require('../models/User');
 const Role = require('../models/Role');
 const UserRole = require('../models/UserRole');
 
+// Import associations to ensure they are loaded
+require('../models/associations');
+
 class UserRoleService {
   
   /**
@@ -94,16 +97,17 @@ class UserRoleService {
         },
         include: [{
           model: Role,
+          as: 'role',
           where: { is_active: true },
           required: true
         }]
       });
 
       return userRoles.map(ur => ({
-        id: ur.Role.id,
-        name: ur.Role.name,
-        description: ur.Role.description,
-        permissions: ur.Role.permissions,
+        id: ur.role.id,
+        name: ur.role.name,
+        description: ur.role.description,
+        permissions: ur.role.permissions,
         assigned_at: ur.assigned_at,
         assigned_by: ur.assigned_by
       }));
@@ -124,12 +128,13 @@ class UserRoleService {
         },
         include: [{
           model: User,
+          as: 'user',
           attributes: ['id', 'username', 'email', 'firstName', 'lastName']
         }]
       });
 
       return userRoles.map(ur => ({
-        user: ur.User,
+        user: ur.user,
         assigned_at: ur.assigned_at,
         assigned_by: ur.assigned_by
       }));
@@ -150,6 +155,7 @@ class UserRoleService {
         },
         include: [{
           model: Role,
+          as: 'role',
           where: { 
             name: roleName,
             is_active: true 
@@ -176,6 +182,7 @@ class UserRoleService {
         },
         include: [{
           model: Role,
+          as: 'role',
           where: { 
             name: roleNames,
             is_active: true 
