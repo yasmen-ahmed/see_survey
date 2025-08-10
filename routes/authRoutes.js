@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const User = require('../models/User');
 const jwt = require('jsonwebtoken');
+const bcrypt = require('bcryptjs');
 const { Op } = require('sequelize');
 const authenticateToken = require('../middleware/authMiddleware');
 
@@ -198,6 +199,70 @@ router.post('/refresh-token', authenticateToken, async (req, res) => {
     });
   } catch (error) {
     res.status(500).json({ error: error.message });
+  }
+});
+
+// Change password endpoint
+router.post('/change-password', async (req, res) => {
+  try {
+    const { email, oldPassword, newPassword } = req.body;
+
+    // Validate input
+    if (!email || !oldPassword || !newPassword) {
+      return res.status(400).json({
+        success: false,
+        error: 'Email, old password, and new password are required'
+      });
+    }
+
+    if (newPassword.length < 6) {
+      return res.status(400).json({
+        success: false,
+        error: 'New password must be at least 6 characters long'
+      });
+    }
+
+    // Find user by email
+    const user = await User.findOne({
+      where: { email: email }
+    });
+
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        error: 'User not found with this email'
+      });
+    }
+
+    // Verify old password
+    const isOldPasswordValid = await bcrypt.compare(oldPassword, user.password);
+    if (!isOldPasswordValid) {
+      return res.status(401).json({
+        success: false,
+        error: 'Current password is incorrect'
+      });
+    }
+
+    // Hash new password
+    const saltRounds = 10;
+    const hashedNewPassword = await bcrypt.hash(newPassword, saltRounds);
+
+    // Update password in database
+    await user.update({
+      password: hashedNewPassword
+    });
+
+    res.json({
+      success: true,
+      message: 'Password changed successfully'
+    });
+
+  } catch (error) {
+    console.error('Change password error:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Internal server error. Please try again.'
+    });
   }
 });
 
