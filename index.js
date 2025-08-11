@@ -83,6 +83,7 @@ const newMWRoutes = require('./routes/newMWRoutes');
 const hierarchicalDataRoutes = require('./routes/hierarchicalDataRoutes');
 const radioUnitsCatalogRoutes = require('./routes/radioUnitsCatalogRoutes');
 const userManagementRoutes = require('./routes/userManagementRoutes');
+const galleryRoutes = require('./routes/galleryRoutes');
 
 // Define Sequelize model associations
 const User = require('./models/User');
@@ -206,6 +207,7 @@ app.use('/api/new-mw', newMWRoutes);
 app.use('/api/hierarchical-data', hierarchicalDataRoutes);
 app.use('/api/radio-units-catalog', radioUnitsCatalogRoutes);
 app.use('/api/user-management', userManagementRoutes);
+app.use('/api/gallery', galleryRoutes);
 
 app.get('/', (req, res) => {
   res.send('Backend is running!');
