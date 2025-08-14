@@ -84,6 +84,8 @@ const hierarchicalDataRoutes = require('./routes/hierarchicalDataRoutes');
 const radioUnitsCatalogRoutes = require('./routes/radioUnitsCatalogRoutes');
 const userManagementRoutes = require('./routes/userManagementRoutes');
 const galleryRoutes = require('./routes/galleryRoutes');
+const roomInfoRoutes = require('./routes/roomInfoRoutes');
+const roomPreparationRoutes = require('./routes/roomPreparationRoutes');
 
 // Define Sequelize model associations
 const User = require('./models/User');
@@ -109,6 +111,8 @@ const HealthSafetyBTSAccess = require('./models/HealthSafetyBTSAccess');
 const MWAntennasImages = require('./models/MWAntennasImages');
 const NewMW = require('./models/NewMW');
 const NewMWImage = require('./models/NewMWImage');
+const RoomInfo = require('./models/RoomInfo');
+const RoomPreparation = require('./models/RoomPreparation');
 // Hierarchical models for MU -> Country -> CT -> Project -> Company
 const MU = require('./models/MU');
 const Country = require('./models/Country');
@@ -160,6 +164,13 @@ HealthSafetySiteAccess.belongsTo(Survey, { foreignKey: 'session_id', targetKey: 
 Survey.hasOne(HealthSafetyBTSAccess, { foreignKey: 'session_id', sourceKey: 'session_id', as: 'healthSafetyBTSAccess', constraints: false });
 HealthSafetyBTSAccess.belongsTo(Survey, { foreignKey: 'session_id', targetKey: 'session_id', constraints: false });
 
+// Room Info and Room Preparation associations
+Survey.hasOne(RoomInfo, { foreignKey: 'session_id', sourceKey: 'session_id', as: 'roomInfo', constraints: false });
+RoomInfo.belongsTo(Survey, { foreignKey: 'session_id', targetKey: 'session_id', constraints: false });
+
+Survey.hasOne(RoomPreparation, { foreignKey: 'session_id', sourceKey: 'session_id', as: 'roomPreparation', constraints: false });
+RoomPreparation.belongsTo(Survey, { foreignKey: 'session_id', targetKey: 'session_id', constraints: false });
+
 // Survey Status History associations
 Survey.hasMany(SurveyStatusHistory, { foreignKey: 'session_id', sourceKey: 'session_id', as: 'statusHistory' });
 SurveyStatusHistory.belongsTo(Survey, { foreignKey: 'session_id', targetKey: 'session_id' });
@@ -208,6 +219,8 @@ app.use('/api/hierarchical-data', hierarchicalDataRoutes);
 app.use('/api/radio-units-catalog', radioUnitsCatalogRoutes);
 app.use('/api/user-management', userManagementRoutes);
 app.use('/api/gallery', galleryRoutes);
+app.use('/api/room-info', roomInfoRoutes);
+app.use('/api/room-preparation', roomPreparationRoutes);
 
 app.get('/', (req, res) => {
   res.send('Backend is running!');
