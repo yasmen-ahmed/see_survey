@@ -61,9 +61,29 @@ router.route('/:session_id')
         };
       }
 
+      // Process images for frontend compatibility (return as flat array like RAN room)
+      const imagesArray = [];
+      if (roomPreparation.images && Array.isArray(roomPreparation.images)) {
+        roomPreparation.images.forEach(image => {
+          imagesArray.push({
+            id: image.id || Math.random(), // Use existing ID or generate temporary one
+            image_category: image.category,
+            original_filename: image.original_filename || image.original_name || 'Unknown',
+            stored_filename: image.filename || image.stored_filename,
+            file_url: image.file_url,
+            file_size: image.file_size,
+            mime_type: image.mime_type,
+            description: image.description,
+            created_at: image.created_at,
+            updated_at: image.updated_at
+          });
+        });
+      }
+
       res.json({
         success: true,
-        data: roomPreparation
+        data: roomPreparation,
+        images: imagesArray
       });
     } catch (error) {
       console.error('Error fetching room preparation:', error);
@@ -83,6 +103,10 @@ router.route('/:session_id')
         files: req.files ? req.files.map(f => ({ fieldname: f.fieldname, originalname: f.originalname })) : 'No files',
         body: req.body
       });
+      
+      // Log the current working directory and upload path
+      console.log('Current working directory:', process.cwd());
+      console.log('Upload directory path:', path.join(__dirname, '..', 'uploads', 'room_preparation'));
 
       const { session_id } = req.params;
       let updateData = {};
@@ -150,6 +174,7 @@ router.route('/:session_id')
       }
 
       // Process uploaded images
+      console.log('Files received:', req.files);
       const uploadedImages = [];
       if (req.files && req.files.length > 0) {
         for (const file of req.files) {
@@ -157,14 +182,20 @@ router.route('/:session_id')
           const filename = `room_preparation_${timestamp}_${file.originalname.replace(/[^a-zA-Z0-9.-]/g, '_')}`;
           
           // Create uploads directory if it doesn't exist
-          const uploadDir = path.join(process.cwd(), 'uploads', 'room_preparation');
+          const uploadDir = path.join(__dirname, '..', 'uploads', 'room_preparation');
+          console.log('Upload directory:', uploadDir);
+          console.log('Directory exists:', fs.existsSync(uploadDir));
           if (!fs.existsSync(uploadDir)) {
+            console.log('Creating directory:', uploadDir);
             fs.mkdirSync(uploadDir, { recursive: true });
           }
 
           // Move file from temp location to final location
           const finalPath = path.join(uploadDir, filename);
+          console.log('Copying file from:', file.path, 'to:', finalPath);
+          console.log('Source file exists:', fs.existsSync(file.path));
           fs.copyFileSync(file.path, finalPath);
+          console.log('File copied successfully. Final file exists:', fs.existsSync(finalPath));
           
           // Clean up temp file
           try {
@@ -176,7 +207,15 @@ router.route('/:session_id')
           uploadedImages.push({
             category: file.fieldname,
             file_url: `/uploads/room_preparation/${filename}`,
-            original_filename: file.originalname
+            original_filename: file.originalname,
+            original_name: file.originalname // Add for consistency with RoomInfo
+          });
+          
+          console.log('Processed uploaded image:', {
+            category: file.fieldname,
+            filename: filename,
+            file_url: `/uploads/room_preparation/${filename}`,
+            finalPath: finalPath
           });
         }
       }
@@ -224,10 +263,31 @@ router.route('/:session_id')
         await roomPreparationRecord.update(roomPreparationData);
       }
 
+      // Process images for response (return as flat array like RAN room)
+      const imagesArray = [];
+      if (roomPreparationRecord.images && Array.isArray(roomPreparationRecord.images)) {
+        roomPreparationRecord.images.forEach(image => {
+          imagesArray.push({
+            id: image.id || Math.random(), // Use existing ID or generate temporary one
+            image_category: image.category,
+            original_filename: image.original_filename || image.original_name || 'Unknown',
+            stored_filename: image.filename || image.stored_filename,
+            file_url: image.file_url,
+            file_size: image.file_size,
+            mime_type: image.mime_type,
+            description: image.description,
+            created_at: image.created_at,
+            updated_at: image.updated_at
+          });
+        });
+      }
+
+      console.log('Final response images:', imagesArray);
       res.json({
         success: true,
         message: created ? 'Room preparation created successfully' : 'Room preparation updated successfully',
-        data: roomPreparationRecord
+        data: roomPreparationRecord,
+        images: imagesArray
       });
     } catch (error) {
       console.error('Error updating room preparation:', error);

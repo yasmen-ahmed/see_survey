@@ -15,6 +15,7 @@ const AcPanelImages = require('../models/AcPanelImages');
 const PowerMeterImages = require('../models/PowerMeterImages');
 const MWAntennasImages = require('../models/MWAntennasImages');
 const TransmissionMWImages = require('../models/TransmissionMWImages');
+const TransmissionRoomImages = require('../models/TransmissionRoomImages');
 const RANEquipmentImages = require('../models/RANEquipmentImages');
 const ExternalDCDistributionImages = require('../models/ExternalDCDistributionImages');
 const NewAntennasImages = require('../models/NewAntennasImages');
@@ -29,6 +30,7 @@ const OutdoorGeneralLayout = require('../models/OutdoorGeneralLayout');
 const OutdoorCabinets = require('../models/OutdoorCabinets');
 const RanEquipment = require('../models/RANEquipment');
 const TransmissionMW = require('../models/TransmissionMW');
+const TransmissionRoom = require('../models/TransmissionRoom');
 const DCPowerSystem = require('../models/DCPowerSystem');
 const MWAntennas = require('../models/MWAntennas');
 const ExternalDCDistribution = require('../models/ExternalDCDistribution');
@@ -58,6 +60,7 @@ async function getDieselInfo(sessionId) {
   const outdoorCabinets = await safeQuery(OutdoorCabinets, ['number_of_cabinets']);
   const ranEquipment = await safeQuery(RanEquipment, ['ran_equipment']);
   const transmissionMW = await safeQuery(TransmissionMW, ['transmission_data']);
+  const transmissionRoom = await safeQuery(TransmissionRoom, ['transmission_data']);
   const dcPowerSystem = await safeQuery(DCPowerSystem, ['dc_power_data']);
   const radioAntenna = await safeQuery(RadioAntenna, ['antenna_count']);
   const radioUnit = await safeQuery(RadioUnit, ['radio_unit_count']);
@@ -92,6 +95,10 @@ async function getDieselInfo(sessionId) {
     transmission_data: [
       transmissionMW?.transmission_data?.type_of_transmission ?? null,
       transmissionMW?.transmission_data?.how_many_mw_link_exist ?? 0
+    ],
+    transmission_room_data: [
+      transmissionRoom?.transmission_data?.type_of_transmission ?? null,
+      transmissionRoom?.transmission_data?.how_many_mw_link_exist ?? 0
     ],
     dc_power_data: [
       dcPowerSystem?.dc_power_data?.dc_rectifiers?.how_many_existing_dc_rectifier_modules ?? 0,
@@ -130,6 +137,7 @@ router.get('/:sessionId', async (req, res) => {
       { name: 'Outdoor Cabinets', key: 'outdoor_cabinets', model: OutdoorCabinetsImages, categoryField: 'image_category', displayName: 'Outdoor Cabinets' },
       { name: 'MW Antennas', key: 'mw_antennas', model: MWAntennasImages, categoryField: 'image_category', displayName: 'MW Antennas' },
       { name: 'Transmission MW', key: 'transmission_mw', model: TransmissionMWImages, categoryField: 'image_category', displayName: 'Transmission MW' },
+      { name: 'Transmission Room', key: 'transmission_room', model: TransmissionRoomImages, categoryField: 'image_category', displayName: 'Transmission Room' },
       { name: 'RAN Equipment', key: 'ran_equipment', model: RANEquipmentImages, categoryField: 'image_category', displayName: 'RAN Equipment' },
       { name: 'External DC Distribution', key: 'external_dc_distribution', model: ExternalDCDistributionImages, categoryField: 'image_category', displayName: 'External DC Distribution' },
       { name: 'New Antennas', key: 'new_antennas', model: NewAntennasImages, categoryField: 'image_category', displayName: 'New Antennas' },
@@ -152,7 +160,7 @@ router.get('/:sessionId', async (req, res) => {
           'SiteImages', 'AntennaStructureImages', 'AntennaImages', 'RadioUnitImages',
           'DCPowerSystemImages', 'OutdoorGeneralLayoutImages', 'OutdoorCabinetsImages',
           'AcConnectionImages', 'AcPanelImages', 'PowerMeterImages', 'MWAntennasImages',
-          'TransmissionMWImages', 'RANEquipmentImages', 'ExternalDCDistributionImages', 'NewMWImage', 
+          'TransmissionMWImages', 'TransmissionRoomImages', 'RANEquipmentImages', 'ExternalDCDistributionImages', 'NewMWImage', 
           'NewAntennasImages', 'NewRadioUnitsImages', 'NewFPFHsImages', 'NewGPSImages'
         ];
 

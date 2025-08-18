@@ -49,19 +49,19 @@ router.route('/:session_id')
         order: [['upload_date', 'DESC']]
       });
 
-      // Group images by category
-      const imagesByCategory = {};
-      images.forEach(image => {
-        if (!imagesByCategory[image.category]) {
-          imagesByCategory[image.category] = [];
-        }
-        imagesByCategory[image.category].push({
-          id: image.id,
-          file_url: `/uploads/room_info/${image.filename}`,
-          category:image.category,
-          name: image.original_name
-        });
-      });
+      // Return images as flat array (like RAN room)
+      const imagesArray = images.map(image => ({
+        id: image.id,
+        image_category: image.category,
+        original_filename: image.original_name || 'Unknown',
+        stored_filename: image.filename,
+        file_url: `/uploads/room_info/${image.filename}`,
+        file_size: image.file_size,
+        mime_type: image.mime_type,
+        description: image.description,
+        created_at: image.created_at,
+        updated_at: image.updated_at
+      }));
 
       // If no room info exists, return empty template
       if (!roomInfo) {
@@ -79,7 +79,7 @@ router.route('/:session_id')
       res.json({
         success: true,
         data: roomInfo,
-        images: imagesByCategory
+        images: imagesArray
       });
     } catch (error) {
       console.error('Error fetching room info:', error);
@@ -99,6 +99,10 @@ router.route('/:session_id')
         files: req.files ? req.files.map(f => ({ fieldname: f.fieldname, originalname: f.originalname })) : 'No files',
         body: req.body
       });
+      
+      // Log the current working directory and upload path
+      console.log('Current working directory:', process.cwd());
+      console.log('Upload directory path:', path.join(__dirname, '..', 'uploads', 'room_info'));
 
       const { session_id } = req.params;
       let updateData = {};
@@ -174,6 +178,7 @@ router.route('/:session_id')
       }
 
       // Handle image uploads
+      console.log('Files received:', req.files);
       if (req.files && req.files.length > 0) {
         for (const file of req.files) {
           const imageCategory = file.fieldname;
@@ -181,8 +186,11 @@ router.route('/:session_id')
           const filename = `room_info_${timestamp}_${file.originalname.replace(/[^a-zA-Z0-9.-]/g, '_')}`;
           
           // Create uploads directory if it doesn't exist
-          const uploadDir = path.join(process.cwd(), 'uploads', 'room_info');
+          const uploadDir = path.join(__dirname, '..', 'uploads', 'room_info');
+          console.log('Upload directory:', uploadDir);
+          console.log('Directory exists:', fs.existsSync(uploadDir));
           if (!fs.existsSync(uploadDir)) {
+            console.log('Creating directory:', uploadDir);
             fs.mkdirSync(uploadDir, { recursive: true });
           }
 
@@ -210,7 +218,10 @@ router.route('/:session_id')
 
           // Move file from temp location to final location
           const finalPath = path.join(uploadDir, filename);
+          console.log('Copying file from:', file.path, 'to:', finalPath);
+          console.log('Source file exists:', fs.existsSync(file.path));
           fs.copyFileSync(file.path, finalPath);
+          console.log('File copied successfully. Final file exists:', fs.existsSync(finalPath));
           
           // Clean up temp file
           try {
@@ -229,6 +240,13 @@ router.route('/:session_id')
             file_size: file.size,
             mime_type: file.mimetype
           });
+          
+          console.log('Saved image record:', {
+            category: imageCategory,
+            filename: filename,
+            file_url: `/uploads/room_info/${filename}`,
+            finalPath: finalPath
+          });
         }
       }
 
@@ -238,23 +256,26 @@ router.route('/:session_id')
         order: [['upload_date', 'DESC']]
       });
 
-      const imagesByCategory = {};
-      images.forEach(image => {
-        if (!imagesByCategory[image.category]) {
-          imagesByCategory[image.category] = [];
-        }
-        imagesByCategory[image.category].push({
-          id: image.id,
-          file_url: `/uploads/room_info/${image.filename}`,
-            name: image.original_name
-        });
-      });
+      // Return images as flat array (like RAN room)
+      const imagesArray = images.map(image => ({
+        id: image.id,
+        image_category: image.category,
+        original_filename: image.original_name || 'Unknown',
+        stored_filename: image.filename,
+        file_url: `/uploads/room_info/${image.filename}`,
+        file_size: image.file_size,
+        mime_type: image.mime_type,
+        description: image.description,
+        created_at: image.created_at,
+        updated_at: image.updated_at
+      }));
 
+      console.log('Final response images:', imagesArray);
       res.json({
         success: true,
         message: created ? 'Room info created successfully' : 'Room info updated successfully',
         data: roomInfo,
-        images: imagesByCategory
+        images: imagesArray
       });
     } catch (error) {
       console.error('Error updating room info:', error);

@@ -62,6 +62,11 @@ const RoomPreparation = sequelize.define('RoomPreparation', {
   rack_free_positions: {
     type: DataTypes.INTEGER,
     allowNull: true
+  },
+  images: {
+    type: DataTypes.JSON,
+    allowNull: true,
+    defaultValue: []
   }
 }, {
   tableName: 'room_preparation',

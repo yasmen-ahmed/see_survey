@@ -47,6 +47,10 @@ app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 app.use('/uploads/mw_antennas', express.static(path.join(__dirname, 'uploads/mw_antennas')));
 app.use('/uploads/site_images', express.static(path.join(__dirname, 'uploads/site_images')));
 app.use('/uploads/transmission_mw', express.static(path.join(__dirname, 'uploads/transmission_mw')));
+app.use('/uploads/transmission_room', express.static(path.join(__dirname, 'uploads/transmission_room')));
+app.use('/uploads/ran-room-questions', express.static(path.join(__dirname, 'uploads/ran-room-questions')));
+app.use('/uploads/room_info', express.static(path.join(__dirname, 'uploads/room_info')));
+app.use('/uploads/room_preparation', express.static(path.join(__dirname, 'uploads/room_preparation')));
 
 // Routes
 const siteLocationRoutes = require('./routes/siteLocationRoutes');
@@ -63,7 +67,9 @@ const outdoorGeneralLayoutRoutes = require('./routes/outdoorGeneralLayoutRoutes'
 const outdoorCabinetsRoutes = require('./routes/outdoorCabinetsRoutes');
 const ranEquipmentRoutes = require('./routes/ranEquipmentRoutes');
 const transmissionMWRoutes = require('./routes/transmissionMW');
+const transmissionRoomRoutes = require('./routes/transmissionRoom');
 const dcPowerSystemRoutes = require('./routes/dcPowerSystem');
+const roomDCPowerSystemRoutes = require('./routes/roomDCPowerSystem');
 const antennaStructureRoutes = require('./routes/antennaStructure');
 const mwAntennasRoutes = require('./routes/mwAntennas');
 const externalDCDistributionRoutes = require('./routes/externalDCDistributionRoutes');
@@ -86,6 +92,7 @@ const userManagementRoutes = require('./routes/userManagementRoutes');
 const galleryRoutes = require('./routes/galleryRoutes');
 const roomInfoRoutes = require('./routes/roomInfoRoutes');
 const roomPreparationRoutes = require('./routes/roomPreparationRoutes');
+const ranRoomRoutes = require('./routes/ranRoomRoutes');
 
 // Define Sequelize model associations
 const User = require('./models/User');
@@ -93,7 +100,9 @@ const Survey = require('./models/Survey');
 const SurveyStatusHistory = require('./models/SurveyStatusHistory');
 const SiteVisitInfo = require('./models/SiteVisitInfo');
 const TransmissionMW = require('./models/TransmissionMW');
+const TransmissionRoom = require('./models/TransmissionRoom');
 const DCPowerSystem = require('./models/DCPowerSystem');
+const RoomDCPowerSystem = require('./models/RoomDCPowerSystem');
 const AntennaStructure = require('./models/AntennaStructure');
 const AntennaStructureImages = require('./models/AntennaStructureImages');
 const MWAntennas = require('./models/MWAntennas');
@@ -113,6 +122,7 @@ const NewMW = require('./models/NewMW');
 const NewMWImage = require('./models/NewMWImage');
 const RoomInfo = require('./models/RoomInfo');
 const RoomPreparation = require('./models/RoomPreparation');
+const RanRoom = require('./models/RanRomm');
 // Hierarchical models for MU -> Country -> CT -> Project -> Company
 const MU = require('./models/MU');
 const Country = require('./models/Country');
@@ -171,6 +181,15 @@ RoomInfo.belongsTo(Survey, { foreignKey: 'session_id', targetKey: 'session_id', 
 Survey.hasOne(RoomPreparation, { foreignKey: 'session_id', sourceKey: 'session_id', as: 'roomPreparation', constraints: false });
 RoomPreparation.belongsTo(Survey, { foreignKey: 'session_id', targetKey: 'session_id', constraints: false });
 
+// RAN Room associations
+Survey.hasOne(RanRoom, { foreignKey: 'session_id', sourceKey: 'session_id', as: 'ranRoom', constraints: false });
+RanRoom.belongsTo(Survey, { foreignKey: 'session_id', targetKey: 'session_id', constraints: false });
+
+// Transmission Room associations
+Survey.hasOne(TransmissionRoom, { foreignKey: 'session_id', sourceKey: 'session_id', as: 'transmissionRoom', constraints: false });
+TransmissionRoom.belongsTo(Survey, { foreignKey: 'session_id', targetKey: 'session_id', constraints: false });
+
+
 // Survey Status History associations
 Survey.hasMany(SurveyStatusHistory, { foreignKey: 'session_id', sourceKey: 'session_id', as: 'statusHistory' });
 SurveyStatusHistory.belongsTo(Survey, { foreignKey: 'session_id', targetKey: 'session_id' });
@@ -198,7 +217,9 @@ app.use('/api/outdoor-general-layout', outdoorGeneralLayoutRoutes);
 app.use('/api/outdoor-cabinets', outdoorCabinetsRoutes);
 app.use('/api/ran-equipment', ranEquipmentRoutes);
 app.use('/api/transmission-mw', transmissionMWRoutes);
+app.use('/api/transmission-room', transmissionRoomRoutes);
 app.use('/api/dc-power-system', dcPowerSystemRoutes);
+app.use('/api/room-dc-power-system', roomDCPowerSystemRoutes);
 app.use('/api/antenna-structure', antennaStructureRoutes);
 app.use('/api/mw-antennas', mwAntennasRoutes);
 app.use('/api/external-dc-distribution', externalDCDistributionRoutes);
@@ -221,6 +242,7 @@ app.use('/api/user-management', userManagementRoutes);
 app.use('/api/gallery', galleryRoutes);
 app.use('/api/room-info', roomInfoRoutes);
 app.use('/api/room-preparation', roomPreparationRoutes);
+app.use('/api/ran-room', ranRoomRoutes);
 
 app.get('/', (req, res) => {
   res.send('Backend is running!');
