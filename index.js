@@ -93,6 +93,7 @@ const galleryRoutes = require('./routes/galleryRoutes');
 const roomInfoRoutes = require('./routes/roomInfoRoutes');
 const roomPreparationRoutes = require('./routes/roomPreparationRoutes');
 const ranRoomRoutes = require('./routes/ranRoomRoutes');
+const notificationRoutes = require('./routes/notificationRoutes');
 
 // Define Sequelize model associations
 const User = require('./models/User');
@@ -243,6 +244,7 @@ app.use('/api/gallery', galleryRoutes);
 app.use('/api/room-info', roomInfoRoutes);
 app.use('/api/room-preparation', roomPreparationRoutes);
 app.use('/api/ran-room', ranRoomRoutes);
+app.use('/api/notifications', notificationRoutes);
 
 app.get('/', (req, res) => {
   res.send('Backend is running!');

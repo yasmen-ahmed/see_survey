@@ -1285,6 +1285,35 @@ router.post('/', authenticateToken, async (req, res) => {
 
     console.log('Survey created successfully:', survey.toJSON());
 
+    // Create notification for survey creation
+    try {
+      const NotificationService = require('../services/NotificationService');
+      await NotificationService.createSurveyCreatedNotification(
+        survey.session_id,
+        creator_id,
+        survey.project // Pass the project name instead of project_id
+      );
+    } catch (notificationError) {
+      console.error('Error creating survey creation notification:', notificationError);
+      // Don't fail the request if notification creation fails
+    }
+
+    // Create notification for survey assignment (if assigned to someone other than creator)
+    if (user_id !== creator_id) {
+      try {
+        const NotificationService = require('../services/NotificationService');
+        await NotificationService.createAssignmentNotification(
+          survey.session_id,
+          user_id,
+          creator_id,
+          project_id
+        );
+      } catch (notificationError) {
+        console.error('Error creating assignment notification:', notificationError);
+        // Don't fail the request if notification creation fails
+      }
+    }
+
     res.status(201).json(survey);
   } catch (error) {
     console.error('Error creating survey:', error);
@@ -1330,6 +1359,22 @@ router.put('/:session_id/status', authenticateToken, async (req, res) => {
       changed_at: new Date(),
       notes: notes || null
     });
+
+    // Create notification for status change
+    try {
+      const NotificationService = require('../services/NotificationService');
+      await NotificationService.createStatusChangeNotification(
+        session_id,
+        currentStatus,
+        TSSR_Status,
+        req.user.id,
+        survey.project, // Pass the project name
+        survey.user_id // Pass the assigned user ID
+      );
+    } catch (notificationError) {
+      console.error('Error creating status change notification:', notificationError);
+      // Don't fail the request if notification creation fails
+    }
 
     console.log(`Status updated from ${currentStatus} to ${TSSR_Status} by ${username}`);
 

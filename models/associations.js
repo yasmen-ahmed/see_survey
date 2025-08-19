@@ -10,6 +10,8 @@ const Project = require('./Project');
 const CT = require('./CT');
 const UserRole = require('./UserRole');
 const UserProject = require('./UserProject');
+const Notification = require('./Notification');
+const Survey = require('./Survey');
 
 // User - Role associations (Many-to-Many through UserRole)
 User.belongsToMany(Role, {
@@ -123,6 +125,17 @@ PowerMeterImages.belongsTo(PowerMeter, {
   onDelete: 'CASCADE'
 });
 
+// Notification associations
+Notification.belongsTo(User, {
+  foreignKey: 'user_id',
+  as: 'user'
+});
+
+User.hasMany(Notification, {
+  foreignKey: 'user_id',
+  as: 'notifications'
+});
+
 module.exports = {
   AcConnectionInfo,
   AcConnectionImages,
@@ -135,5 +148,7 @@ module.exports = {
   Project,
   CT,
   UserRole,
-  UserProject
+  UserProject,
+  Notification,
+  Survey
 }; 
