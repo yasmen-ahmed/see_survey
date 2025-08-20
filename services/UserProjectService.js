@@ -129,12 +129,13 @@ class UserProjectService {
         },
         include: [{
           model: User,
+          as: 'user',
           attributes: ['id', 'username', 'email', 'firstName', 'lastName']
         }]
       });
 
       return userProjects.map(up => ({
-        user: up.User,
+        user: up.user,
         role_in_project: up.role_in_project,
         permissions: up.permissions,
         assigned_at: up.assigned_at,

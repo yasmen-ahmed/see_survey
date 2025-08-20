@@ -29,12 +29,12 @@ const Country = sequelize.define('Country', {
     }
   },
   code: {
-    type: DataTypes.STRING(3),
+    type: DataTypes.STRING(10),
     allowNull: false,
     unique: true,
     validate: {
       notEmpty: true,
-      len: [2, 3] // Country codes are typically 2-3 characters
+      len: [2, 10] // Country codes can be 2-10 characters
     }
   }
 }, {

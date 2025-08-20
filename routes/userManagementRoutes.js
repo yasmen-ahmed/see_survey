@@ -225,6 +225,32 @@ router.get('/roles', async (req, res) => {
   }
 });
 
+// Get users by project
+router.get('/projects/:projectId/users', async (req, res) => {
+  const projectId = req.params.projectId;
+
+  try {
+    const projectUsers = await UserProjectService.getProjectUsers(projectId);
+
+    // Safely extract user objects, filter out nulls if any
+    const users = (projectUsers || [])
+      .filter(item => item && item.user)
+      .map(item => item.user);
+
+    res.json({
+      success: true,
+      data: users // this will be [] if no users found
+    });
+  } catch (error) {
+    console.error('Error fetching project users:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message || 'Failed to fetch project users'
+    });
+  }
+});
+
+
 // Get all projects
 router.get('/projects', async (req, res) => {
   try {

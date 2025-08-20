@@ -7,7 +7,8 @@ const NewMW = sequelize.define('NewMW', {
   mw_index: { type: DataTypes.INTEGER, allowNull: false },
   fields: { type: DataTypes.JSON, allowNull: false },
   created_at: { type: DataTypes.DATE, defaultValue: DataTypes.NOW },
-  updated_at: { type: DataTypes.DATE, defaultValue: DataTypes.NOW }
+  updated_at: { type: DataTypes.DATE, defaultValue: DataTypes.NOW },
+  
 }, {
   tableName: 'new_mw',
   timestamps: false

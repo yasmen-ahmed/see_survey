@@ -29,7 +29,11 @@ router.get('/:sessionId', async (req, res) => {
   try {
     let data = await NewMWService.getMWsWithImages(req.params.sessionId);
     data = attachAbsoluteUrls(data, req);
-    res.json({ success: true, data });
+    res.json({
+      success: true,
+      count: Array.isArray(data) ? data.length : 0,
+      data
+    });
   } catch (err) {
     res.status(500).json({ success: false, error: err.message });
   }

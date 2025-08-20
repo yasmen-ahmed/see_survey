@@ -5,6 +5,41 @@ const Country = require('../models/Country');
 const CT = require('../models/CT');
 const Project = require('../models/Project');
 const Company = require('../models/Company');
+const sequelize = require('../config/database');
+
+// Create a junction table for MU-Country many-to-many relationship
+const MUCountry = sequelize.define('MUCountry', {
+  id: {
+    type: sequelize.constructor.DataTypes.INTEGER,
+    primaryKey: true,
+    autoIncrement: true
+  },
+  mu_id: {
+    type: sequelize.constructor.DataTypes.INTEGER,
+    allowNull: false,
+    references: {
+      model: 'mus',
+      key: 'id'
+    }
+  },
+  country_id: {
+    type: sequelize.constructor.DataTypes.INTEGER,
+    allowNull: false,
+    references: {
+      model: 'countries',
+      key: 'id'
+    }
+  }
+}, {
+  tableName: 'mu_countries',
+  timestamps: true,
+  indexes: [
+    {
+      unique: true,
+      fields: ['mu_id', 'country_id']
+    }
+  ]
+});
 
 // Get all MUs
 router.get('/mus', async (req, res) => {
@@ -12,252 +47,219 @@ router.get('/mus', async (req, res) => {
     const mus = await MU.findAll({
       order: [['name', 'ASC']]
     });
+
     res.json(mus);
   } catch (error) {
     console.error('Error fetching MUs:', error);
-    res.status(500).json({ message: 'Failed to fetch MUs', error: error.message });
+    res.status(500).json({ error: 'Failed to fetch MUs' });
   }
 });
 
-// Create new MU
-router.post('/mus', async (req, res) => {
-  try {
-    const { name, code } = req.body;
-    
-    if (!name) {
-      return res.status(400).json({ message: 'MU name is required' });
-    }
-    
-    // Check if MU already exists
-    const existingMU = await MU.findOne({ where: { name } });
-    if (existingMU) {
-      return res.status(409).json({ message: 'MU already exists', data: existingMU });
-    }
-    
-    const mu = await MU.create({
-      name,
-      code: code || name.toUpperCase()
-    });
-    
-    res.status(201).json({ message: 'MU created successfully', data: mu });
-  } catch (error) {
-    console.error('Error creating MU:', error);
-    res.status(500).json({ message: 'Failed to create MU', error: error.message });
-  }
-});
-
-// Get countries by MU
+// Get countries by MU (many-to-many relationship)
 router.get('/countries/:muId', async (req, res) => {
   try {
-    const { muId } = req.params;
-    const countries = await Country.findAll({
-      where: { mu_id: muId },
-      order: [['name', 'ASC']]
+    const muId = req.params.muId;
+    
+    // Use raw SQL query to get countries for this MU through the junction table
+    const countries = await sequelize.query(`
+      SELECT c.* 
+      FROM countries c
+      INNER JOIN mu_countries mc ON c.id = mc.country_id
+      WHERE mc.mu_id = :muId
+      ORDER BY c.name ASC
+    `, {
+      replacements: { muId },
+      type: sequelize.QueryTypes.SELECT
     });
+
     res.json(countries);
   } catch (error) {
-    console.error('Error fetching countries:', error);
-    res.status(500).json({ message: 'Failed to fetch countries', error: error.message });
-  }
-});
-
-// Create new Country
-router.post('/countries', async (req, res) => {
-  try {
-    const { name, code, mu_id } = req.body;
-    
-    if (!name || !mu_id) {
-      return res.status(400).json({ message: 'Country name and MU ID are required' });
-    }
-    
-    // Check if country already exists for this MU
-    const existingCountry = await Country.findOne({ 
-      where: { name, mu_id } 
-    });
-    if (existingCountry) {
-      return res.status(409).json({ message: 'Country already exists for this MU', data: existingCountry });
-    }
-    
-    const country = await Country.create({
-      name,
-      code: code || name.substring(0, 2).toUpperCase(),
-      mu_id
-    });
-    
-    res.status(201).json({ message: 'Country created successfully', data: country });
-  } catch (error) {
-    console.error('Error creating Country:', error);
-    res.status(500).json({ message: 'Failed to create Country', error: error.message });
+    console.error('Error fetching countries for MU:', error);
+    res.status(500).json({ error: 'Failed to fetch countries' });
   }
 });
 
 // Get CTs by country
 router.get('/cts/:countryId', async (req, res) => {
   try {
-    const { countryId } = req.params;
+    const countryId = req.params.countryId;
+    
     const cts = await CT.findAll({
       where: { country_id: countryId },
       order: [['name', 'ASC']]
     });
+
     res.json(cts);
   } catch (error) {
     console.error('Error fetching CTs:', error);
-    res.status(500).json({ message: 'Failed to fetch CTs', error: error.message });
-  }
-});
-
-// Create new CT
-router.post('/cts', async (req, res) => {
-  try {
-    const { name, code, country_id } = req.body;
-    
-    if (!name || !country_id) {
-      return res.status(400).json({ message: 'CT name and Country ID are required' });
-    }
-    
-    // Check if CT already exists for this country
-    const existingCT = await CT.findOne({ 
-      where: { name, country_id } 
-    });
-    if (existingCT) {
-      return res.status(409).json({ message: 'CT already exists for this country', data: existingCT });
-    }
-    
-    const ct = await CT.create({
-      name,
-      code: code || `${name.substring(0, 6).toUpperCase()}_CT`,
-      country_id
-    });
-    
-    res.status(201).json({ message: 'CT created successfully', data: ct });
-  } catch (error) {
-    console.error('Error creating CT:', error);
-    res.status(500).json({ message: 'Failed to create CT', error: error.message });
+    res.status(500).json({ error: 'Failed to fetch CTs' });
   }
 });
 
 // Get projects by CT
 router.get('/projects/:ctId', async (req, res) => {
   try {
-    const { ctId } = req.params;
+    const ctId = req.params.ctId;
+    
     const projects = await Project.findAll({
       where: { ct_id: ctId },
       order: [['name', 'ASC']]
     });
+
     res.json(projects);
   } catch (error) {
     console.error('Error fetching projects:', error);
-    res.status(500).json({ message: 'Failed to fetch projects', error: error.message });
-  }
-});
-
-// Create new Project
-router.post('/projects', async (req, res) => {
-  try {
-    const { name, code, ct_id } = req.body;
-    
-    if (!name || !ct_id) {
-      return res.status(400).json({ message: 'Project name and CT ID are required' });
-    }
-    
-    // Check if project already exists for this CT
-    const existingProject = await Project.findOne({ 
-      where: { name, ct_id } 
-    });
-    if (existingProject) {
-      return res.status(409).json({ message: 'Project already exists for this CT', data: existingProject });
-    }
-    
-    const project = await Project.create({
-      name,
-      code: code || `${name.substring(0, 6).toUpperCase()}_PROJ`,
-      ct_id
-    });
-    
-    res.status(201).json({ message: 'Project created successfully', data: project });
-  } catch (error) {
-    console.error('Error creating Project:', error);
-    res.status(500).json({ message: 'Failed to create Project', error: error.message });
+    res.status(500).json({ error: 'Failed to fetch projects' });
   }
 });
 
 // Get companies by project
 router.get('/companies/:projectId', async (req, res) => {
   try {
-    const { projectId } = req.params;
+    const projectId = req.params.projectId;
+    
     const companies = await Company.findAll({
       where: { project_id: projectId },
       order: [['name', 'ASC']]
     });
+
     res.json(companies);
   } catch (error) {
     console.error('Error fetching companies:', error);
-    res.status(500).json({ message: 'Failed to fetch companies', error: error.message });
+    res.status(500).json({ error: 'Failed to fetch companies' });
   }
 });
 
-// Create new Company
-router.post('/companies', async (req, res) => {
+// Get all countries (for admin purposes)
+router.get('/countries', async (req, res) => {
   try {
-    const { name, code, project_id } = req.body;
-    
-    if (!name || !project_id) {
-      return res.status(400).json({ message: 'Company name and Project ID are required' });
-    }
-    
-    // Check if company already exists for this project
-    const existingCompany = await Company.findOne({ 
-      where: { name, project_id } 
+    const countries = await Country.findAll({
+      order: [['name', 'ASC']]
     });
-    if (existingCompany) {
-      return res.status(409).json({ message: 'Company already exists for this project', data: existingCompany });
-    }
-    
-    const company = await Company.create({
-      name,
-      code: code || `${name.substring(0, 6).toUpperCase()}_COMP`,
-      project_id
-    });
-    
-    res.status(201).json({ message: 'Company created successfully', data: company });
+
+    res.json(countries);
   } catch (error) {
-    console.error('Error creating Company:', error);
-    res.status(500).json({ message: 'Failed to create Company', error: error.message });
+    console.error('Error fetching all countries:', error);
+    res.status(500).json({ error: 'Failed to fetch countries' });
   }
 });
 
-// Get complete hierarchy for a specific path (for debugging/validation)
-router.get('/hierarchy/:muId/:countryId/:ctId/:projectId', async (req, res) => {
+// Get all CTs (for admin purposes)
+router.get('/cts', async (req, res) => {
   try {
-    const { muId, countryId, ctId, projectId } = req.params;
-    
-    const hierarchy = await MU.findOne({
-      where: { id: muId },
-      include: [{
-        model: Country,
-        as: 'countries',
-        where: { id: countryId },
-        include: [{
-          model: CT,
-          as: 'cts',
-          where: { id: ctId },
-          include: [{
-            model: Project,
-            as: 'projects',
-            where: { id: projectId },
-            include: [{
-              model: Company,
-              as: 'companies'
-            }]
-          }]
-        }]
-      }]
+    const cts = await CT.findAll({
+      order: [['name', 'ASC']]
     });
-    
-    res.json(hierarchy);
+
+    res.json(cts);
   } catch (error) {
-    console.error('Error fetching hierarchy:', error);
-    res.status(500).json({ message: 'Failed to fetch hierarchy', error: error.message });
+    console.error('Error fetching all CTs:', error);
+    res.status(500).json({ error: 'Failed to fetch CTs' });
+  }
+});
+
+// Get all projects (for admin purposes)
+router.get('/projects', async (req, res) => {
+  try {
+    const projects = await Project.findAll({
+      order: [['name', 'ASC']]
+    });
+
+    res.json(projects);
+  } catch (error) {
+    console.error('Error fetching all projects:', error);
+    res.status(500).json({ error: 'Failed to fetch projects' });
+  }
+});
+
+// Get all companies (for admin purposes)
+router.get('/companies', async (req, res) => {
+  try {
+    const companies = await Company.findAll({
+      order: [['name', 'ASC']]
+    });
+
+    res.json(companies);
+  } catch (error) {
+    console.error('Error fetching all companies:', error);
+    res.status(500).json({ error: 'Failed to fetch companies' });
+  }
+});
+
+// Get hierarchical data for a specific MU (for debugging)
+router.get('/hierarchy/:muId', async (req, res) => {
+  try {
+    const muId = req.params.muId;
+    
+    const mu = await MU.findByPk(muId);
+    if (!mu) {
+      return res.status(404).json({ error: 'MU not found' });
+    }
+
+    // Get countries for this MU using raw SQL
+    const countries = await sequelize.query(`
+      SELECT c.* 
+      FROM countries c
+      INNER JOIN mu_countries mc ON c.id = mc.country_id
+      WHERE mc.mu_id = :muId
+      ORDER BY c.name ASC
+    `, {
+      replacements: { muId },
+      type: sequelize.QueryTypes.SELECT
+    });
+
+    // Get CTs for each country
+    const countriesWithCTs = await Promise.all(
+      countries.map(async (country) => {
+        const cts = await CT.findAll({
+          where: { country_id: country.id },
+          order: [['name', 'ASC']]
+        });
+
+        // Get projects for each CT
+        const ctsWithProjects = await Promise.all(
+          cts.map(async (ct) => {
+            const projects = await Project.findAll({
+              where: { ct_id: ct.id },
+              order: [['name', 'ASC']]
+            });
+
+            // Get companies for each project
+            const projectsWithCompanies = await Promise.all(
+              projects.map(async (project) => {
+                const companies = await Company.findAll({
+                  where: { project_id: project.id },
+                  order: [['name', 'ASC']]
+                });
+
+                return {
+                  ...project.toJSON(),
+                  companies
+                };
+              })
+            );
+
+            return {
+              ...ct.toJSON(),
+              projects: projectsWithCompanies
+            };
+          })
+        );
+
+        return {
+          ...country,
+          cts: ctsWithProjects
+        };
+      })
+    );
+
+    res.json({
+      mu: mu.toJSON(),
+      countries: countriesWithCTs
+    });
+  } catch (error) {
+    console.error('Error fetching hierarchical data:', error);
+    res.status(500).json({ error: 'Failed to fetch hierarchical data' });
   }
 });
 
