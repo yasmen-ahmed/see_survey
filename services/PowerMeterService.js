@@ -30,6 +30,7 @@ class PowerMeterService {
         record = await PowerMeter.create({
           session_id: sessionId,
           serial_number: '',
+          powerMeterCapacity :null,
           meter_reading: null,
           ac_power_source_type: null,
           power_cable_config: null,
@@ -172,6 +173,7 @@ class PowerMeterService {
   static processUpdateData(data) {
     const processed = {
       serial_number: data.serial_number || '',
+      powerMeterCapacity: data.powerMeterCapacity || null,
       meter_reading: data.meter_reading || null,
       ac_power_source_type: data.ac_power_source_type || null,
       power_cable_config: null,
@@ -281,6 +283,7 @@ class PowerMeterService {
     return {
       session_id: data.session_id,
       serial_number: data.serial_number || '',
+      powerMeterCapacity: data.powerMeterCapacity ,
       meter_reading: data.meter_reading,
       ac_power_source_type: data.ac_power_source_type,
       power_cable_config: data.power_cable_config || {

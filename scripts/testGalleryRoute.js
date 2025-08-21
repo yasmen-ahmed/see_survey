@@ -38,10 +38,10 @@ app.get('/test-gallery-routes', (req, res) => {
 });
 
 // Start server
-const PORT = 3001;
+const PORT = 3000;
 app.listen(PORT, () => {
   console.log(`✅ Test server running on port ${PORT}`);
-  console.log('🌐 Test the gallery routes at: http://localhost:3001/test-gallery-routes');
+  console.log('🌐 Test the gallery routes at: http://localhost:3000/test-gallery-routes');
 });
 
 module.exports = app; 

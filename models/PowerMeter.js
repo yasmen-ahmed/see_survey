@@ -27,6 +27,14 @@ const PowerMeter = sequelize.define('PowerMeter', {
       len: [0, 100]
     }
   },
+  powerMeterCapacity: { 
+    type: DataTypes.FLOAT,
+    defaultValue: null,
+    validate: {
+      min: 0
+    }
+  },
+  
   
   meter_reading: {
     type: DataTypes.FLOAT,

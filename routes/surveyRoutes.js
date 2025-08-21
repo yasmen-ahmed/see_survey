@@ -1558,6 +1558,39 @@ router.delete('/all', async (req, res) => {
   }
 });
 
+// Get survey details by session ID
+router.get('/:session_id', authenticateToken, async (req, res) => {
+  try {
+    const { session_id } = req.params;
+    
+    const survey = await Survey.findOne({
+      where: { session_id },
+      include: [
+        { model: User, as: 'user', attributes: { exclude: ['password'] } },
+        { model: User, as: 'createdBy', attributes: { exclude: ['password'] } },
+        { model: Project, as: 'projectData' }
+      ]
+    });
+    
+    if (!survey) {
+      return res.status(404).json({ error: 'Survey not found' });
+    }
+    
+    res.json({
+      session_id: survey.session_id,
+      site_id: survey.site_id,
+      project: survey.projectData?.name || survey.project,
+      TSSR_Status: survey.TSSR_Status,
+      created_at: survey.created_at,
+      user: survey.user,
+      createdBy: survey.createdBy
+    });
+  } catch (error) {
+    console.error("Error fetching survey details:", error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
 // Delete survey
 router.delete('/:siteId/:createdAt', async (req, res) => {
   try {
