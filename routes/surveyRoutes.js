@@ -1306,7 +1306,7 @@ router.post('/', authenticateToken, async (req, res) => {
           survey.session_id,
           user_id,
           creator_id,
-          project_id
+          survey.project // Pass the project name instead of project_id
         );
       } catch (notificationError) {
         console.error('Error creating assignment notification:', notificationError);

@@ -1,12 +1,12 @@
-const { Notification, User, UserProject, Survey, Role, UserRole } = require('../models/associations');
+const { Notification, User, UserProject, Survey, Role, UserRole, Project } = require('../models/associations');
 const { Op } = require('sequelize');
 
 class NotificationService {
   // Create notification for survey creation
-  static async createSurveyCreatedNotification(surveyId, creatorId, projectId) {
+  static async createSurveyCreatedNotification(surveyId, creatorId, projectName) {
     try {
       // Get all users who should be notified about new surveys
-      const usersToNotify = await this.getUsersToNotifyForSurveyCreation(projectId);
+      const usersToNotify = await this.getUsersToNotifyForSurveyCreation(projectName);
       
       const notifications = [];
       for (const userId of usersToNotify) {
@@ -14,7 +14,7 @@ class NotificationService {
           notifications.push({
             user_id: userId,
             title: 'New Survey Created',
-            message: `A new survey has been created for project ${projectId}`,
+            message: `A new survey has been created for project ${projectName}`,
             type: 'survey_created',
             related_survey_id: surveyId,
             related_project_id: null // Set to null since we're using project name as string
@@ -34,10 +34,10 @@ class NotificationService {
   }
 
   // Create notification for status changes
-  static async createStatusChangeNotification(surveyId, oldStatus, newStatus, changedByUserId, projectId, assignedUserId) {
+  static async createStatusChangeNotification(surveyId, oldStatus, newStatus, changedByUserId, projectName, assignedUserId) {
     try {
       // Get all users who should be notified about status changes
-      const usersToNotify = await this.getUsersToNotifyForStatusChange(projectId, newStatus, surveyId, assignedUserId);
+      const usersToNotify = await this.getUsersToNotifyForStatusChange(projectName, newStatus, surveyId, assignedUserId);
       
       const notifications = [];
       for (const userId of usersToNotify) {
@@ -68,7 +68,7 @@ class NotificationService {
   }
 
   // Create notification for survey assignment (for site engineers)
-  static async createAssignmentNotification(surveyId, assignedUserId, assignedByUserId, projectId) {
+  static async createAssignmentNotification(surveyId, assignedUserId, assignedByUserId, projectName) {
     try {
       // Check if assigned user is a site engineer
       const assignedUser = await User.findByPk(assignedUserId, {
@@ -113,10 +113,10 @@ class NotificationService {
   }
 
   // Create notification for rework requests
-  static async createReworkNotification(surveyId, requestedByUserId, projectId) {
+  static async createReworkNotification(surveyId, requestedByUserId, projectName) {
     try {
       // Get all coordinators and approvers for the project
-      const usersToNotify = await this.getUsersToNotifyForRework(projectId);
+      const usersToNotify = await this.getUsersToNotifyForRework(projectName);
       
       const notifications = [];
       for (const userId of usersToNotify) {
@@ -127,7 +127,7 @@ class NotificationService {
             message: `A rework has been requested for survey ${surveyId}`,
             type: 'rework',
             related_survey_id: surveyId,
-            related_project_id: projectId
+            related_project_id: projectName
           });
         }
       }
@@ -143,86 +143,88 @@ class NotificationService {
     }
   }
 
-  // Get users to notify for survey creation (coordinators only)
+  // Helper method to get project ID from project name
+  static async getProjectIdFromName(projectName) {
+    try {
+      const project = await Project.findOne({
+        where: { name: projectName }
+      });
+      return project ? project.id : null;
+    } catch (error) {
+      console.error('Error getting project ID from name:', error);
+      return null;
+    }
+  }
+
+  // Get users to notify for survey creation (coordinators only) - filtered by project
   static async getUsersToNotifyForSurveyCreation(projectName) {
     try {
-      // Since project field in survey is a string, we'll notify all coordinators
-      // This is a simplified approach - in a real system you'd have a proper project mapping
-      const coordinators = await User.findAll({
+      // First, get the project ID from the project name
+      const projectId = await this.getProjectIdFromName(projectName);
+      if (!projectId) {
+        console.log(`Project not found for name: ${projectName}`);
+        return [];
+      }
+
+      // Get users associated with this specific project who have coordinator role
+      const userProjects = await UserProject.findAll({
+        where: { 
+          project_id: projectId,
+          is_active: true
+        },
         include: [{
-          model: Role,
-          as: 'roles',
-          through: {
-            model: UserRole,
-            where: { is_active: true }
-          },
-          where: { 
-            is_active: true,
-            name: 'coordinator'
-          }
+          model: User,
+          as: 'user',
+          include: [{
+            model: Role,
+            as: 'roles',
+            through: {
+              model: UserRole,
+              where: { is_active: true }
+            },
+            where: { 
+              is_active: true,
+              name: 'coordinator'
+            }
+          }]
         }]
       });
 
-      const usersToNotify = new Set(); // Use Set to prevent duplicates
-      coordinators.forEach(user => {
-        usersToNotify.add(user.id);
+      const usersToNotify = [];
+      userProjects.forEach(userProject => {
+        if (userProject.user && userProject.user.roles.length > 0) {
+          usersToNotify.push(userProject.user.id);
+        }
       });
       
-      return Array.from(usersToNotify); // Convert Set back to array
+      return usersToNotify;
     } catch (error) {
       console.error('Error getting users to notify for survey creation:', error);
       return [];
     }
   }
 
-  // Get users to notify for status changes based on role requirements
+  // Get users to notify for status changes based on role requirements - filtered by project
   static async getUsersToNotifyForStatusChange(projectName, newStatus, surveyId, assignedUserId) {
     try {
+      // First, get the project ID from the project name
+      const projectId = await this.getProjectIdFromName(projectName);
+      if (!projectId) {
+        console.log(`Project not found for name: ${projectName}`);
+        return [];
+      }
+
       const usersToNotify = new Set(); // Use Set to prevent duplicates
       
-      // 1. Admin: Notify for every status change from other users
-      const adminUsers = await User.findAll({
+      // Get all users associated with this specific project
+      const userProjects = await UserProject.findAll({
+        where: { 
+          project_id: projectId,
+          is_active: true
+        },
         include: [{
-          model: Role,
-          as: 'roles',
-          through: {
-            model: UserRole,
-            where: { is_active: true }
-          },
-          where: { 
-            is_active: true,
-            name: 'admin'
-          }
-        }]
-      });
-      
-      adminUsers.forEach(adminUser => {
-        usersToNotify.add(adminUser.id);
-      });
-      
-      // 2. Coordinator: Notify for any status change
-      const coordinators = await User.findAll({
-        include: [{
-          model: Role,
-          as: 'roles',
-          through: {
-            model: UserRole,
-            where: { is_active: true }
-          },
-          where: { 
-            is_active: true,
-            name: 'coordinator'
-          }
-        }]
-      });
-      
-      coordinators.forEach(coordinator => {
-        usersToNotify.add(coordinator.id);
-      });
-      
-      // 3. Site Engineer: Notify if assigned to survey and status changes to rework
-      if (newStatus === 'rework' && assignedUserId) {
-        const assignedUser = await User.findByPk(assignedUserId, {
+          model: User,
+          as: 'user',
           include: [{
             model: Role,
             as: 'roles',
@@ -230,38 +232,37 @@ class NotificationService {
               model: UserRole,
               where: { is_active: true }
             },
-            where: { 
-              is_active: true,
-              name: 'survey_engineer'
-            }
+            where: { is_active: true }
           }]
-        });
+        }]
+      });
+
+      // Filter users by role requirements
+      for (const userProject of userProjects) {
+        if (!userProject.user || userProject.user.roles.length === 0) continue;
         
-        if (assignedUser && assignedUser.roles.length > 0) {
-          usersToNotify.add(assignedUserId);
+        const roles = userProject.user.roles.map(role => role.name);
+        const userId = userProject.user.id;
+        
+        // 1. Admin: Notify for every status change from other users
+        if (roles.includes('admin')) {
+          usersToNotify.add(userId);
         }
-      }
-      
-      // 4. Approver: Notify if status changes to submitted
-      if (newStatus === 'submitted') {
-        const approvers = await User.findAll({
-          include: [{
-            model: Role,
-            as: 'roles',
-            through: {
-              model: UserRole,
-              where: { is_active: true }
-            },
-            where: { 
-              is_active: true,
-              name: 'approver'
-            }
-          }]
-        });
         
-        approvers.forEach(approver => {
-          usersToNotify.add(approver.id);
-        });
+        // 2. Coordinator: Notify for any status change
+        if (roles.includes('coordinator')) {
+          usersToNotify.add(userId);
+        }
+        
+        // 3. Site Engineer: Notify if assigned to survey and status changes to rework
+        if (newStatus === 'rework' && assignedUserId && userId === assignedUserId && roles.includes('survey_engineer')) {
+          usersToNotify.add(userId);
+        }
+        
+        // 4. Approver: Notify if status changes to submitted
+        if (newStatus === 'submitted' && roles.includes('approver')) {
+          usersToNotify.add(userId);
+        }
       }
       
       return Array.from(usersToNotify); // Convert Set back to array
@@ -271,9 +272,16 @@ class NotificationService {
     }
   }
 
-  // Get users to notify for rework
-  static async getUsersToNotifyForRework(projectId) {
+  // Get users to notify for rework - filtered by project
+  static async getUsersToNotifyForRework(projectName) {
     try {
+      // First, get the project ID from the project name
+      const projectId = await this.getProjectIdFromName(projectName);
+      if (!projectId) {
+        console.log(`Project not found for name: ${projectName}`);
+        return [];
+      }
+
       const userProjects = await UserProject.findAll({
         where: { 
           project_id: projectId,
@@ -296,6 +304,8 @@ class NotificationService {
 
       const usersToNotify = [];
       for (const userProject of userProjects) {
+        if (!userProject.user || userProject.user.roles.length === 0) continue;
+        
         const roles = userProject.user.roles.map(role => role.name);
         if (roles.includes('coordinator') || roles.includes('approver')) {
           usersToNotify.push(userProject.user.id);
