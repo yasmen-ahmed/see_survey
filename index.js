@@ -94,6 +94,7 @@ const roomInfoRoutes = require('./routes/roomInfoRoutes');
 const roomPreparationRoutes = require('./routes/roomPreparationRoutes');
 const ranRoomRoutes = require('./routes/ranRoomRoutes');
 const notificationRoutes = require('./routes/notificationRoutes');
+const commentRoutes = require('./routes/commentRoutes');
 
 // Define Sequelize model associations
 const User = require('./models/User');
@@ -245,6 +246,7 @@ app.use('/api/room-info', roomInfoRoutes);
 app.use('/api/room-preparation', roomPreparationRoutes);
 app.use('/api/ran-room', ranRoomRoutes);
 app.use('/api/notifications', notificationRoutes);
+app.use('/api/comments', commentRoutes);
 
 app.get('/', (req, res) => {
   res.send('Backend is running!');

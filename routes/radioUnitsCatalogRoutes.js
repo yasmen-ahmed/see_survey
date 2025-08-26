@@ -68,7 +68,26 @@ router.get('/', async (req, res) => {
 
     // Add hardware type filter
     if (hardware_type) {
-      whereClause.hardware_type = hardware_type;
+      // Handle multiple hardware types
+      let hardwareTypes = hardware_type;
+      try {
+        // Try to parse as JSON array
+        const parsed = JSON.parse(hardware_type);
+        if (Array.isArray(parsed)) {
+          hardwareTypes = parsed;
+        }
+      } catch (e) {
+        // If not JSON, treat as single value
+        hardwareTypes = hardware_type;
+      }
+      
+      if (Array.isArray(hardwareTypes)) {
+        whereClause.hardware_type = {
+          [require('sequelize').Op.in]: hardwareTypes
+        };
+      } else {
+        whereClause.hardware_type = hardwareTypes;
+      }
     }
 
     // Add power connector type filter

@@ -12,6 +12,7 @@ const UserRole = require('./UserRole');
 const UserProject = require('./UserProject');
 const Notification = require('./Notification');
 const Survey = require('./Survey');
+const Comment = require('./Comment');
 
 // User - Role associations (Many-to-Many through UserRole)
 User.belongsToMany(Role, {
@@ -136,6 +137,29 @@ User.hasMany(Notification, {
   as: 'notifications'
 });
 
+// Comment associations
+Comment.belongsTo(User, {
+  foreignKey: 'user_id',
+  as: 'user'
+});
+
+User.hasMany(Comment, {
+  foreignKey: 'user_id',
+  as: 'comments'
+});
+
+Comment.belongsTo(Survey, {
+  foreignKey: 'session_id',
+  targetKey: 'session_id',
+  as: 'survey'
+});
+
+Survey.hasMany(Comment, {
+  foreignKey: 'session_id',
+  sourceKey: 'session_id',
+  as: 'comments'
+});
+
 module.exports = {
   AcConnectionInfo,
   AcConnectionImages,
@@ -150,5 +174,6 @@ module.exports = {
   UserRole,
   UserProject,
   Notification,
-  Survey
+  Survey,
+  Comment
 }; 
